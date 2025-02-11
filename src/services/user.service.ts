@@ -8,6 +8,14 @@ import { User } from '../schemas';
 export class UserService {
   constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
+  async findAllUsers(): Promise<User[]> {
+    return this.userModel.find();
+  }
+
+  async findUserByTgId(tgUserId: number): Promise<User> {
+    return this.userModel.findOne({ tgUserId: tgUserId });
+  }
+
   async createOrUpdateUser(data: Partial<User>) {
     return this.userModel.findOneAndUpdate({ tgUserId: data.tgUserId }, data, {
       upsert: true,

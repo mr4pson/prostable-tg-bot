@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Markup, Telegraf } from 'telegraf';
-import { UserService } from './user.service';
 import { BlockchainService } from './blockchain.service';
+import { TgMenuService } from './tg-menu.service';
+import { UserService } from './user.service';
 
 @Injectable()
 export class TelegramService {
@@ -10,6 +11,7 @@ export class TelegramService {
   constructor(
     private userService: UserService,
     private blockchainService: BlockchainService,
+    private tgMenuService: TgMenuService,
   ) {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN ?? '');
     this.setupHandlers();
@@ -19,11 +21,21 @@ export class TelegramService {
   private setupHandlers() {
     // Обработка старта
     this.bot.start(async (ctx) => {
-      const referrerId = ctx.startPayload;
+      const user = await this.userService.findUserByTgId(ctx.from.id);
+
+      if (user && user.publicKey) {
+        this.tgMenuService.setupMainMenu(ctx);
+
+        return;
+      }
+
+      // const referrerId = ctx.startPayload;
+      const referrerId = undefined;
+
       await this.userService.createOrUpdateUser({
         tgUserId: ctx.from.id,
         username: ctx.from.username,
-        referrer: referrerId as any,
+        referrer: referrerId,
       });
 
       await ctx.replyWithMarkdown(
@@ -33,6 +45,41 @@ export class TelegramService {
           Markup.button.callback('❌ Отказываюсь', 'decline_terms'),
         ]),
       );
+    });
+
+    this.bot.hears('Баланс пополнения', async (ctx) => {
+      const user = await this.userService.findUserByTgId(ctx.from.id);
+
+      this.tgMenuService.setupBalanceTopupMenu(ctx, user.walletBalance);
+    });
+
+    // Обработка главного меню
+    this.bot.hears('Баланс ROST', (ctx) => {
+      ctx.reply('You selected Option 2');
+    });
+    this.bot.hears('Баланс выплат', (ctx) => {
+      ctx.reply('You selected Option 3');
+    });
+    this.bot.hears('Поддержка', (ctx) => {
+      ctx.reply('You selected Option 1');
+    });
+    this.bot.hears('F.A.Q', (ctx) => {
+      ctx.reply('You selected Option 2');
+    });
+    this.bot.hears('Реферальная система', (ctx) => {
+      ctx.reply('You selected Option 3');
+    });
+
+    // Обработка меню Баланс пополнения
+    this.bot.hears('Пополнить USDT', (ctx) => {});
+    this.bot.hears('Отправить USDT', (ctx) => {
+      ctx.reply('You selected Option 3');
+    });
+    this.bot.hears('Инвестировать', (ctx) => {
+      ctx.reply('You selected Option 1');
+    });
+    this.bot.hears('Главное меню', (ctx) => {
+      this.tgMenuService.setupMainMenu(ctx);
     });
 
     // Обработка принятия условий
@@ -51,13 +98,10 @@ export class TelegramService {
     // Обработка кнопки "Продолжить"
     this.bot.hears('Продолжить ▶️', async (ctx) => {
       const wallet = this.blockchainService.generateWallet();
-      const hashedKey = await this.userService.hashPrivateKey(
-        wallet.privateKey,
-      );
 
       await this.userService.createOrUpdateUser({
         tgUserId: ctx.from.id,
-        privateKeyHash: hashedKey,
+        privateKey: wallet.privateKey,
         publicKey: wallet.publicKey,
       });
 
@@ -71,7 +115,10 @@ export class TelegramService {
     this.bot.on('text', async (ctx) => {
       if (ctx.message.text.includes('@')) {
         await this.userService.updateEmail(ctx.from.id, ctx.message.text);
-        await ctx.reply('Регистрация завершена!');
+        await ctx.reply(
+          'Отлично! Регистрация завершена, теперь вы можете пользоваться личным кабинетом SMART INVEST',
+        );
+        await this.tgMenuService.setupMainMenu(ctx);
       }
     });
   }

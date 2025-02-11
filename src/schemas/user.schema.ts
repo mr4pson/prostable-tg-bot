@@ -13,7 +13,7 @@ export class User extends Document {
   referrer?: User;
 
   @Prop()
-  privateKeyHash: string;
+  privateKey: string;
 
   @Prop()
   publicKey: string;

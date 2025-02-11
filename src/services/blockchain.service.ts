@@ -1,39 +1,112 @@
 import { Injectable } from '@nestjs/common';
-import Web3 from 'web3';
+import {
+  Contract,
+  EthersContract,
+  EthersSigner,
+  hexValue,
+  InjectContractProvider,
+  InjectSignerProvider,
+  parseEther,
+  parseUnits,
+  Wallet,
+} from 'nestjs-ethers';
+import { contractAbi, usdtContractAbi } from 'src/common';
+import { UserService } from './user.service';
 
 @Injectable()
 export class BlockchainService {
-  private web3: Web3;
-  private botAddress: string;
-  private botPrivateKey: string;
+  private adminWallet: Wallet;
+  private readonly contractService: Contract;
 
-  constructor() {
-    this.web3 = new Web3(process.env.BSC_NODE_URL);
-    this.botAddress = process.env.BOT_WALLET_ADDRESS ?? '';
-    this.botPrivateKey = process.env.BOT_WALLET_PRIVATE_KEY ?? '';
+  constructor(
+    @InjectContractProvider()
+    private readonly ethersContract: EthersContract,
+    @InjectSignerProvider()
+    private readonly ethersSigner: EthersSigner,
+    private readonly userService: UserService,
+  ) {
+    this.adminWallet = this.ethersSigner.createWallet(
+      process.env.WALLET_PRIVATE,
+    );
+
+    this.contractService = this.ethersContract.create(
+      process.env.CONTRACT_ADDRESS,
+      contractAbi,
+      this.adminWallet,
+    );
+    this.listenToEvents();
+
+    (async () => {
+      const users = await this.userService.findAllUsers();
+
+      console.log(users);
+      users.forEach((user) => {
+        this.listenForUserTopup(user.privateKey);
+      });
+    })();
   }
 
   generateWallet() {
-    const account = this.web3.eth.accounts.create();
+    const wallet = Wallet.createRandom();
+
     return {
-      publicKey: account.address,
-      privateKey: account.privateKey,
+      publicKey: wallet.address,
+      privateKey: wallet.privateKey,
     };
   }
 
   async sendBNB(toAddress: string, amount: string) {
     const tx = {
-      from: this.botAddress,
       to: toAddress,
-      value: this.web3.utils.toWei(amount, 'ether'),
-      gas: 21000,
-      gasPrice: await this.web3.eth.getGasPrice(),
+      value: parseEther(amount),
+      gasLimit: 21000, // Standard gas limit for simple transfers
+      gasPrice: await this.adminWallet.getGasPrice(),
     };
 
-    const signedTx = await this.web3.eth.accounts.signTransaction(
-      tx,
-      this.botPrivateKey,
+    // Send and wait for transaction confirmation
+    const txResponse = await this.adminWallet.sendTransaction(tx);
+    return await txResponse.wait();
+  }
+
+  private listenToEvents() {
+    this.contractService.on(
+      'Deposit',
+      (user: string, amount: BigInt, event: any) => {
+        this.handleDepositEvent(user, amount, event);
+      },
     );
-    return this.web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+  }
+
+  public listenForUserTopup(
+    clientWallet: string,
+    // amount: number,
+  ) {
+    const userWallet = this.ethersSigner.createWallet(clientWallet);
+    const usdtContract: Contract = this.ethersContract.create(
+      process.env.USDT_CONTRACT_ADDRESS,
+      usdtContractAbi,
+      userWallet,
+    );
+
+    usdtContract.on(
+      'Transfer',
+      (from: string, to: string, value: bigint, event) => {
+        console.log(from, to, value, event);
+      },
+    );
+
+    // return this.contractService.create(clientWallet, amount, {
+    //   gasPrice: parseUnits('1', 'gwei'),
+    //   gasLimit: hexValue(1500000),
+    // });
+  }
+
+  private handleDepositEvent(user: string, amount: BigInt, event: any) {
+    console.log(`New deposit detected:
+      - User: ${user}
+      - Amount: ${amount.toString()}
+      - Transaction hash: ${event.transactionHash}
+      - Block number: ${event.blockNumber}
+    `);
   }
 }

@@ -15,7 +15,7 @@ export class TransactionListener implements OnModuleInit {
   }
 
   async onModuleInit() {
-    this.monitorTransactions();
+    // this.monitorTransactions();
   }
   private async monitorTransactions() {
     const subscription = await this.web3.eth.subscribe('newBlockHeaders');
