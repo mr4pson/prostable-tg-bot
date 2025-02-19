@@ -1,16 +1,29 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
+
+interface IUser {
+  tgUserId: number;
+  username?: string;
+  referrer: Types.ObjectId;
+  privateKey: string;
+  publicKey: string;
+  email?: string;
+  acceptedTerms: boolean;
+  walletBalance: number;
+  rostBalance: number;
+  hasFundedWallet: boolean;
+}
 
 @Schema({ timestamps: true })
-export class User extends Document {
+export class User extends Document implements IUser {
   @Prop({ required: true, unique: true })
   tgUserId: number;
 
   @Prop()
   username?: string;
 
-  @Prop({ type: 'ObjectId', ref: 'User' })
-  referrer?: User;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  referrer: Types.ObjectId;
 
   @Prop()
   privateKey: string;
@@ -27,8 +40,12 @@ export class User extends Document {
   @Prop({ default: 0 })
   walletBalance: number;
 
+  @Prop({ default: 0 })
+  rostBalance: number;
+
   @Prop({ default: false })
   hasFundedWallet: boolean;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ referrer: 1 });

@@ -1,0 +1,8 @@
+export enum TransactionType {
+  REINVEST = 'REINVEST',
+  INVEST = 'INVEST',
+  TOPUP = 'TOPUP',
+  DEPOSIT = 'DEPOSIT',
+  WITHDRAW = 'WITHDRAW',
+  TRANSFER = 'TRANSFER',
+}

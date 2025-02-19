@@ -11,7 +11,10 @@ import {
   Wallet,
 } from 'nestjs-ethers';
 import { contractAbi, usdtContractAbi } from 'src/common';
-import { UserService } from './user.service';
+
+export const delay = (ms: number) => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
 
 @Injectable()
 export class BlockchainService {
@@ -23,7 +26,6 @@ export class BlockchainService {
     private readonly ethersContract: EthersContract,
     @InjectSignerProvider()
     private readonly ethersSigner: EthersSigner,
-    private readonly userService: UserService,
   ) {
     this.adminWallet = this.ethersSigner.createWallet(
       process.env.WALLET_PRIVATE,
@@ -34,16 +36,6 @@ export class BlockchainService {
       contractAbi,
       this.adminWallet,
     );
-    this.listenToEvents();
-
-    (async () => {
-      const users = await this.userService.findAllUsers();
-
-      console.log(users);
-      users.forEach((user) => {
-        this.listenForUserTopup(user.privateKey);
-      });
-    })();
   }
 
   generateWallet() {
@@ -56,57 +48,72 @@ export class BlockchainService {
   }
 
   async sendBNB(toAddress: string, amount: string) {
+    const adminWallet = this.ethersSigner.createWallet(
+      '71806495f046d3e01b3719c4c1948290ffe778b72d76b030edf57b5ad47b16ba',
+    );
+
     const tx = {
       to: toAddress,
       value: parseEther(amount),
       gasLimit: 21000, // Standard gas limit for simple transfers
-      gasPrice: await this.adminWallet.getGasPrice(),
+      gasPrice: await adminWallet.getGasPrice(),
     };
 
     // Send and wait for transaction confirmation
-    const txResponse = await this.adminWallet.sendTransaction(tx);
+    const txResponse = await adminWallet.sendTransaction(tx);
     return await txResponse.wait();
   }
 
-  private listenToEvents() {
-    this.contractService.on(
-      'Deposit',
-      (user: string, amount: BigInt, event: any) => {
-        this.handleDepositEvent(user, amount, event);
-      },
-    );
-  }
-
-  public listenForUserTopup(
-    clientWallet: string,
-    // amount: number,
-  ) {
-    const userWallet = this.ethersSigner.createWallet(clientWallet);
-    const usdtContract: Contract = this.ethersContract.create(
+  public handleApprove(privateKey: string, amount: number) {
+    const userWallet = this.ethersSigner.createWallet(privateKey);
+    const usdtContract = this.ethersContract.create(
       process.env.USDT_CONTRACT_ADDRESS,
       usdtContractAbi,
       userWallet,
     );
 
-    usdtContract.on(
-      'Transfer',
-      (from: string, to: string, value: bigint, event) => {
-        console.log(from, to, value, event);
-      },
+    return usdtContract.approve(
+      process.env.CONTRACT_ADDRESS,
+      parseUnits(amount.toString(), 18),
     );
-
-    // return this.contractService.create(clientWallet, amount, {
-    //   gasPrice: parseUnits('1', 'gwei'),
-    //   gasLimit: hexValue(1500000),
-    // });
   }
 
-  private handleDepositEvent(user: string, amount: BigInt, event: any) {
-    console.log(`New deposit detected:
-      - User: ${user}
-      - Amount: ${amount.toString()}
-      - Transaction hash: ${event.transactionHash}
-      - Block number: ${event.blockNumber}
-    `);
+  public async handleDeposit(privateKey: string, amount: number): Promise<any> {
+    try {
+      const trx = await this.handleApprove(privateKey, amount);
+
+      await trx.wait();
+      console.log(trx);
+
+      const userWallet = this.ethersSigner.createWallet(privateKey);
+      const contract = this.ethersContract.create(
+        process.env.CONTRACT_ADDRESS,
+        contractAbi,
+        userWallet,
+      );
+
+      return contract.deposit(parseUnits(amount.toString(), 18));
+    } catch (error) {
+      console.log(error);
+      return false;
+    }
+  }
+
+  public handleSendTransfer(
+    senderPrivateKey: string,
+    receiverPublicKey: string,
+    amount: number,
+  ): Promise<any> {
+    const userWallet = this.ethersSigner.createWallet(senderPrivateKey);
+    const usdtContract = this.ethersContract.create(
+      process.env.USDT_CONTRACT_ADDRESS,
+      usdtContractAbi,
+      userWallet,
+    );
+
+    return usdtContract.transfer(
+      receiverPublicKey,
+      parseUnits(amount.toString(), 18),
+    );
   }
 }
