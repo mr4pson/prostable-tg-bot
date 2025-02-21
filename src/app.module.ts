@@ -13,7 +13,6 @@ import {
   PullTransactionService,
   TelegramService,
   TgMenuService,
-  TransactionListener,
   TransactionService,
   UserService,
 } from './services';
@@ -54,7 +53,6 @@ import {
     TelegramService,
     BlockchainService,
     TgMenuService,
-    TransactionListener,
     CashboxPullProcessor,
     MoralisService,
     TransactionService,

@@ -47,14 +47,14 @@ export class BlockchainService {
     };
   }
 
-  async sendBNB(toAddress: string, amount: string) {
+  async sendBNB(toAddress: string) {
     const adminWallet = this.ethersSigner.createWallet(
-      '71806495f046d3e01b3719c4c1948290ffe778b72d76b030edf57b5ad47b16ba',
+      process.env.SEND_BNB_WALLET_PRIVATE,
     );
 
     const tx = {
       to: toAddress,
-      value: parseEther(amount),
+      value: parseEther('0.0015'),
       gasLimit: 21000, // Standard gas limit for simple transfers
       gasPrice: await adminWallet.getGasPrice(),
     };

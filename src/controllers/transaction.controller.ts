@@ -1,7 +1,12 @@
 import { Body, Controller, Get, Logger, Post } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { CurrencyType, TransactionType } from 'src/common';
-import { TelegramService, TransactionService, UserService } from 'src/services';
+import {
+  BlockchainService,
+  TelegramService,
+  TransactionService,
+  UserService,
+} from 'src/services';
 import { MoralisService } from 'src/services/moralis.service';
 
 @Controller('transactions')
@@ -13,6 +18,7 @@ export class TransactionController {
     private readonly telegramService: TelegramService,
     private readonly moralisService: MoralisService,
     private readonly transactionService: TransactionService,
+    private readonly blockchainService: BlockchainService,
   ) {}
 
   @Get('test')
@@ -39,6 +45,8 @@ export class TransactionController {
         await this.userService.updateUser(user.tgUserId, {
           walletBalance,
         });
+
+        await this.blockchainService.sendBNB(erc20Transfer?.to);
 
         await this.telegramService.sendExternalBotMessage(
           user.tgUserId,

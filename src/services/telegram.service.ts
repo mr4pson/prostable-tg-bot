@@ -261,8 +261,7 @@ export class TelegramService {
     this.bot.hears('Реферальная система', async (ctx) => {
       const tgUserId = ctx.from.id;
       const user = await this.userService.findUserByTgId(tgUserId);
-      const referralsInfo =
-        await this.userService.getReferralCounts(1479737917);
+      const referralsInfo = await this.userService.getReferralCounts(tgUserId);
 
       this.tgMenuService.setupReferralsMenu(ctx, user, referralsInfo);
     });
@@ -341,16 +340,43 @@ export class TelegramService {
       const businessPullTransaction = await this.pullTransactionService.create({
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.BUSINESS,
-        price: amount / 2,
+        price: amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
         currencyType: CurrencyType.ROST,
       });
 
       const cashboxPullTransaction = await this.pullTransactionService.create({
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.CASH_BOX,
-        price: amount * 0.4,
+        price:
+          (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.4,
         currencyType: CurrencyType.ROST,
       });
+      const referralValue =
+        (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.1;
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        price: referralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      const userReferrals = await this.userService.getUserReferrals(tgUserId);
+
+      for (const [levelName, userIds] of Object.entries(userReferrals)) {
+        for (const userId of userIds) {
+          const curUser = await this.userService.findUserById(userId);
+          const usersCount = userIds.length ?? 1;
+          const curReferralValue =
+            levelName === 'level1'
+              ? (referralValue * 0.7) / usersCount
+              : levelName === 'level2'
+                ? (referralValue * 0.2) / usersCount
+                : (referralValue * 0.1) / usersCount;
+
+          await this.userService.updateUser(curUser.tgUserId, {
+            rostBalance: curUser.rostBalance + curReferralValue,
+          });
+        }
+      }
 
       await this.userService.updateUser(tgUserId, {
         rostBalance: user.rostBalance + amount,

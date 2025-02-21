@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import {
   Model,
   RootFilterQuery,
+  Types,
   UpdateQuery,
   UpdateWithAggregationPipeline,
 } from 'mongoose';
@@ -23,6 +24,10 @@ export class UserService {
     const totalUsersCount = await this.userModel.countDocuments();
 
     return totalUsersCount - 1;
+  }
+
+  async findUserById(id: Types.ObjectId): Promise<User> {
+    return this.userModel.findOne(id);
   }
 
   async findUserByTgId(tgUserId: number): Promise<User> {
@@ -140,6 +145,43 @@ export class UserService {
       level1: level1Count,
       level2: level2Count,
       level3: level3Count,
+    };
+  }
+
+  async getUserReferrals(tgUserId: number) {
+    const user = await this.userModel.findOne({ tgUserId }).exec();
+
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    const userId = user._id;
+
+    // ----- Уровень 1 -----
+    // Все пользователи, у которых "referrer" == userId
+    const level1Users = await this.userModel
+      .find({ referrer: userId }, { _id: 1 })
+      .exec();
+
+    // ----- Уровень 2 -----
+    // Все пользователи, у которых "referrer" входит в список level1Users
+    const level1Ids = level1Users.map((u) => u._id) as Types.ObjectId[];
+    const level2Users = await this.userModel
+      .find({ referrer: { $in: level1Ids } }, { _id: 1 })
+      .exec();
+
+    // ----- Уровень 3 -----
+    // Все пользователи, у которых "referrer" входит в список level2Users
+    const level2Ids = level2Users.map((u) => u._id) as Types.ObjectId[];
+    const level3Users = await this.userModel
+      .find({ referrer: { $in: level2Ids } }, { _id: 1 })
+      .exec();
+    const level3Ids = level3Users.map((u) => u._id) as Types.ObjectId[];
+
+    return {
+      level1: level1Ids,
+      level2: level2Ids,
+      level3: level3Ids,
     };
   }
 }
