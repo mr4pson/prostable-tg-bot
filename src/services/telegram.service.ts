@@ -64,7 +64,7 @@ export class TelegramService {
   
   Для использования полноценного функционала телеграм бота вам требуется согласиться с пользовательским соглашением
   
-  ССЫЛКА на соглашение*`,
+  https://docs.google.com/document/d/1fIFLBVIdLpM6TPeQg8SaA_ITBGtMERmRQ_u3wC-HIIE/edit?usp=drivesdk*`,
           Markup.inlineKeyboard([
             Markup.button.callback('Да, принять условия', 'accept_terms'),
             Markup.button.callback(
