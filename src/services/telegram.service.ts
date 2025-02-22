@@ -218,15 +218,12 @@ export class TelegramService {
   private async handleRegistration(ctx) {
     if (ctx.message.text.includes('@')) {
       await this.userService.updateEmail(ctx.from.id, ctx.message.text);
-      await ctx.reply(
-        `Отлично! Сейчас мы с создадим вам внутренний криптовалютный кошелек, он потребуется для взаимодействия с смарт-контрактами и работы реферальной системы`,
-      );
       await ctx.replyWithMarkdown(
-        `✅ Отлично! Добро пожаловать в главное меню! Для начала работы нажмите на кнопку 
-*"Баланс пополнения"*`,
+        `Отлично! Теперь вам нужно обязательно подписаться на канал, чтобы продолжить: https://t.me/+6hsWt7xrH5w0ZTY6`,
+        Markup.inlineKeyboard([
+          Markup.button.callback('Продолжить', 'check_subscription'),
+        ]),
       );
-
-      await this.tgMenuService.setupMainMenu(ctx);
     }
   }
 
@@ -238,14 +235,14 @@ export class TelegramService {
     this.bot.hears('Баланс пополнения', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
-      this.tgMenuService.setupBalanceTopupMenu(ctx, user.walletBalance);
+      this.tgMenuService.setupBalanceTopupMenu(ctx, user?.walletBalance);
     });
 
     // Обработка главного меню
     this.bot.hears('Баланс ROST', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
-      this.tgMenuService.setupROSTBalanceMenu(ctx, user.rostBalance);
+      this.tgMenuService.setupROSTBalanceMenu(ctx, user?.rostBalance);
     });
     this.bot.hears('Баланс выплат', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
@@ -283,28 +280,30 @@ export class TelegramService {
     });
     this.bot.hears('Отправить USDT пользователю', (ctx) => {
       ctx.reply(`Для внутреннего перевода USDT укажите логин телеграмма зарегистрированного пользователя бота ProStable.
-Пример: @varzavaa`);
+Пример: @ProStable`);
 
       this.userStates.set(ctx.from.id, 'send_usdt_username_input');
     });
     this.bot.hears('Инвестировать', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
-      ctx.replyWithMarkdown(
-        `Ваш баланс *${user.walletBalance} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
-        
-Минимальная транзакция *100 USDT*.
-Ваши средства будут распределены:
+      //       ctx.replyWithMarkdown(
+      //         `Ваш баланс *${user.walletBalance} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
 
-*50%* - будут сохранены в токенах ROST в ПУЛ БИЗНЕС и будут приумножены Вам назад в 5-ти кратном размере в течение года после запуска ЦОД ориентировочная дата 02.2026 года
+      // Минимальная транзакция *100 USDT*.
+      // Ваши средства будут распределены:
 
-*40%* - будут сохранены  в токенах ROST в ПУЛ КАССА и затем будут распределены в равных долях между всеми участниками проекта раз в сутки
+      // *50%* - будут сохранены в токенах ROST в ПУЛ БИЗНЕС и будут приумножены Вам назад в 5-ти кратном размере в течение года после запуска ЦОД ориентировочная дата 02.2026 года
 
-*10%* - распределяются по реферальной системе
-`,
-      );
+      // *40%* - будут сохранены  в токенах ROST в ПУЛ КАССА и затем будут распределены в равных долях между всеми участниками проекта раз в сутки
 
-      this.userStates.set(ctx.from.id, 'invest');
+      // *10%* - распределяются по реферальной системе
+      // `,
+      //       );
+
+      ctx.replyWithMarkdown('Временно выключено');
+
+      // this.userStates.set(ctx.from.id, 'invest');
     });
 
     // Обработка принятия условий ивестирования
@@ -540,7 +539,7 @@ export class TelegramService {
       });
 
       await ctx.replyWithMarkdown(
-        `Отлично! Сейчас мы с создадим вам внутренний криптовалютный кошелек, он потребуется для взаимодействия с смарт-контрактами и работы реферальной системы`,
+        `Отлично! Сейчас мы создадим вам внутренний криптовалютный кошелек, он потребуется для взаимодействия смарт-контрактами и работы реферальной системы`,
 
         Markup.inlineKeyboard([
           Markup.button.callback('Продолжить', 'continue_registration'),
@@ -573,6 +572,36 @@ export class TelegramService {
       );
 
       this.userStates.set(tgUserId, 'registration');
+    });
+
+    this.bot.action('check_subscription', async (ctx) => {
+      // const chatId = '-1002113804394';
+      // const chatMember = await this.bot.telegram.getChatMember(
+      //   chatId,
+      //   ctx.from.id,
+      // );
+
+      // const isChatMember = ['member', 'administrator', 'creator'].includes(
+      //   chatMember?.status,
+      // );
+
+      // if (!isChatMember) {
+      // await ctx.replyWithMarkdown(
+      //   `Отлично! Теперь вам нужно обязательно подписаться на канал, чтобы продолжить: https://t.me/+6hsWt7xrH5w0ZTY6`,
+      //   Markup.inlineKeyboard([
+      //     Markup.button.callback('Продолжить', 'check_subscription'),
+      //   ]),
+      // );
+
+      // return;
+      // }
+
+      await ctx.replyWithMarkdown(
+        `✅ Отлично! Добро пожаловать в главное меню! Для начала работы нажмите на кнопку
+*"Баланс пополнения"*`,
+      );
+
+      await this.tgMenuService.setupMainMenu(ctx);
     });
   }
 
