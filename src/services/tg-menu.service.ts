@@ -88,9 +88,9 @@ export class TgMenuService {
 
 Ваше вознаграждение составит *х5 = ${rostBalance * 5} USDT*
 
-Для получения большего вознаграждения вам осталось накопить ещё 750 USDT в Пуле Бизнес
+Для получения большего вознаграждения вам осталось накопить ещё 2500 USDT в Пуле Бизнес
 
-*Групповой объем: 2470 ROST = 2470 USDT*
+*Групповой объем: 0 ROST = 0 USDT*
 
 Для получения Лидерского Бонуса 1 ВТС 
 Вам осталось накопить 40000 USDT Группового объема
@@ -136,10 +136,10 @@ export class TgMenuService {
 
   public async setupPaymentsBalanceMenu(ctx: Context, user: User) {
     const userInvestSum = await this.transactionService.getUserInvestSum(
-      new Types.ObjectId(user._id as string),
+      new Types.ObjectId(user?._id as string),
     );
     const userReinvestSum = await this.transactionService.getUserReInvestSum(
-      new Types.ObjectId(user._id as string),
+      new Types.ObjectId(user?._id as string),
     );
 
     ctx.replyWithMarkdown(
