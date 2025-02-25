@@ -22,6 +22,12 @@ export class TransactionService {
     return this.getUserPriceSum(userId, TransactionType.REINVEST);
   }
 
+  async getActiveUserIds() {
+    return this.transactionModel.distinct('user', {
+      type: TransactionType.INVEST,
+    });
+  }
+
   async create(payload: Partial<Transaction>) {
     try {
       return this.transactionModel.create(payload);

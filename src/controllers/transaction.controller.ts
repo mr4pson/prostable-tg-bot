@@ -50,7 +50,7 @@ export class TransactionController {
 
         await this.telegramService.sendExternalBotMessage(
           user.tgUserId,
-          `На ваш адрес "баланса пополнения" поступили ${erc20Transfer.valueWithDecimals} USDT, хэш транзакции: https://bscscan.com/tx/${erc20Transfer.transactionHash}`,
+          `На ваш адрес "баланса пополнения" поступили ${Math.floor(erc20Transfer.valueWithDecimals)} USDT, хэш транзакции: https://bscscan.com/tx/${erc20Transfer.transactionHash}`,
         );
 
         await this.moralisService.removeStream(streamId);
@@ -99,11 +99,11 @@ export class TransactionController {
         });
         await this.telegramService.sendExternalBotMessage(
           sender.tgUserId,
-          `Отлично, ${amount} USDT отправлены пользователю @${receiver.username}`,
+          `Отлично, ${Math.floor(amount)} USDT отправлены пользователю @${receiver.username}`,
         );
         await this.telegramService.sendExternalBotMessage(
           receiver.tgUserId,
-          `На ваш адрес "баланса пополнения" поступили *${amount} USDT* от пользователя @${sender.username}`,
+          `На ваш адрес "баланса пополнения" поступили *${Math.floor(amount)} USDT* от пользователя @${sender.username}`,
         );
         await this.moralisService.removeStream(streamId);
         await this.telegramService.setupMainMenuExternally(sender.tgUserId);

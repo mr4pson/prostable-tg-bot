@@ -30,6 +30,10 @@ export class UserService {
     return totalUsersCount - 1;
   }
 
+  async getActiveUserIds(): Promise<Types.ObjectId[]> {
+    return this.transactionService.getActiveUserIds();
+  }
+
   async findUserById(id: Types.ObjectId): Promise<User> {
     return this.userModel.findOne(id);
   }
@@ -90,6 +94,13 @@ export class UserService {
     return this.userModel
       .findOneAndUpdate({ tgUserId }, { $set: updateData }, { new: true })
       .exec();
+  }
+
+  async updateUserById(
+    userId: Types.ObjectId,
+    query: UpdateQuery<User> | UpdateWithAggregationPipeline,
+  ): Promise<User | null> {
+    return this.userModel.findOneAndUpdate(userId, query, { new: true }).exec();
   }
 
   public async getRostHoldersNumber(): Promise<number> {
@@ -187,6 +198,22 @@ export class UserService {
       level2: level2Ids,
       level3: level3Ids,
     };
+  }
+
+  async getFirstLineActiveReferralsCount(tgUserId: number) {
+    const userIds = await this.getUserReferrals(tgUserId);
+    let counter = 0;
+
+    for (const userId of userIds.level1) {
+      const userInvestSum =
+        await this.transactionService.getUserInvestSum(userId);
+
+      if (userInvestSum >= 100) {
+        counter += 1;
+      }
+    }
+
+    return counter;
   }
 
   async getGroupVolume(tgUserId: number) {

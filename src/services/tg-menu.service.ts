@@ -9,12 +9,14 @@ import { Context } from 'telegraf';
 import { UserService } from './user.service';
 import { TransactionService } from './transaction.service';
 import { Types } from 'mongoose';
+import { PullTransactionService } from './pull-transaction.service';
 
 @Injectable()
 export class TgMenuService {
   constructor(
     private userService: UserService,
     private transactionService: TransactionService,
+    private pullTransactionService: PullTransactionService,
   ) {}
   public async setupMainMenu(ctx: Context) {
     const techUser = await this.userService.findUserByTgId(
@@ -29,7 +31,7 @@ export class TgMenuService {
 
 Максимальная эмиссия: *${formatNumber(process.env.MAX_EMISSION_VALUE)} ROST*
 
-До следуюего повышения курса осталось выкупить: *${formatNumber(nextRateRaseNumber)} ROST*
+До следуюего повышения курса осталось выкупить: *${formatNumber(Math.floor(nextRateRaseNumber))} ROST*
 
 Сожжено: *0 ROST*
 
@@ -61,7 +63,7 @@ export class TgMenuService {
     ctx.replyWithMarkdown(
       `Это меню раздела "Баланс пополнения", здесь вы можете пополнить свой аккаунт USDT, принять участие в инвестировании, а так же отправить USDT пользователю бота. Чтобы пополнить баланс нажмите на кнопку: *Пополнить USDT*
 
-*Ваш баланс USDT: ${walletBalance}*`,
+*Ваш баланс USDT: ${Math.floor(walletBalance)}*`,
       {
         reply_markup: {
           keyboard: [
@@ -79,24 +81,32 @@ export class TgMenuService {
     );
   }
 
-  public setupROSTBalanceMenu(
-    ctx: Context,
-    rostBalance: number,
-    groupVolume: number,
-  ) {
-    const emissionMultiplier = calculateEmissionMultiplier(rostBalance);
+  async setupROSTBalanceMenu(ctx: Context) {
+    const user = await this.userService.findUserByTgId(ctx.from.id);
+    const techUser = await this.userService.findUserByTgId(
+      Number(process.env.TECH_ACC_TG_ID),
+    );
+    const groupVolume = await this.userService.getGroupVolume(ctx.from.id);
+    const businessPullSum =
+      await this.pullTransactionService.getUserBusinessPullSum(
+        new Types.ObjectId(user?._id as string),
+      );
+
+    const emissionMultiplier = calculateEmissionMultiplier(
+      techUser?.rostBalance,
+    );
 
     ctx.replyWithMarkdown(
       `
 *Личный объем:*
 
-Накоплено в ПУЛ БИЗНЕС: *${rostBalance} ROST = ${(rostBalance * emissionMultiplier) / 2} USDT*
+Накоплено в ПУЛ БИЗНЕС: *${Math.floor(businessPullSum)} ROST = ${Math.floor(businessPullSum * emissionMultiplier)} USDT*
 
-Ваше вознаграждение составит *х5 = ${rostBalance * 5} USDT*
+Ваше вознаграждение составит *х5 = ${Math.floor(businessPullSum * 5)} USDT*
 
-Для получения большего вознаграждения вам осталось накопить ещё 2500 USDT в Пуле Бизнес
+Для получения большего вознаграждения вам осталось накопить ещё 500 USDT в Пуле Бизнес
 
-*Групповой объем: ${groupVolume} ROST = ${groupVolume * emissionMultiplier} USDT*
+*Групповой объем: ${Math.floor(groupVolume)} ROST = ${Math.floor(groupVolume * emissionMultiplier)} USDT*
 
 Для получения Лидерского Бонуса 1 ВТС 
 Вам осталось накопить 40000 USDT Группового объема
@@ -115,6 +125,7 @@ export class TgMenuService {
     ctx: Context,
     user: User,
     referralsInfo: IReferralsInfo,
+    firstLineActiveReferrals: number,
   ) {
     ctx.replyWithMarkdown(
       `
@@ -128,7 +139,7 @@ export class TgMenuService {
 
 Ваших активированных партнеров 
 (те кто инвестировал не менее 100 USDT) 
-в 1 линии - *5 человек*
+в 1 линии - *${firstLineActiveReferrals} человек*
 `,
       {
         reply_markup: {
@@ -141,30 +152,43 @@ export class TgMenuService {
   }
 
   public async setupPaymentsBalanceMenu(ctx: Context, user: User) {
+    const techUser = await this.userService.findUserByTgId(
+      Number(process.env.TECH_ACC_TG_ID),
+    );
+    const emissionMultiplier = calculateEmissionMultiplier(
+      techUser?.rostBalance,
+    );
     const userInvestSum = await this.transactionService.getUserInvestSum(
       new Types.ObjectId(user?._id as string),
     );
     const userReinvestSum = await this.transactionService.getUserReInvestSum(
       new Types.ObjectId(user?._id as string),
     );
+    const cashboxPullTopupSum =
+      await this.pullTransactionService.getUserCashboxTopupSum(
+        new Types.ObjectId(user?._id as string),
+      );
+    const referralSum = await this.pullTransactionService.getUserReferralSum(
+      new Types.ObjectId(user?._id as string),
+    );
 
     ctx.replyWithMarkdown(
       `
-Всего инвестировано: *${userInvestSum} USDT = ${userInvestSum} ROST*
+Всего инвестировано: *${Math.floor(userInvestSum)} USDT = ${Math.floor(userInvestSum * emissionMultiplier)} ROST*
 
-Доступный баланс: *${user.rostBalance} ROST*
+Доступный баланс: *${Math.floor(user.rostBalance)} ROST*
 
-Всего начислено из ПУЛ КАССА: *210 ROST = 210 USDT*
+Всего начислено из ПУЛ КАССА: *${Math.floor(cashboxPullTopupSum)} ROST = ${Math.floor(cashboxPullTopupSum * emissionMultiplier)} USDT*
 
-Всего начислено реферальных: *185 ROST = 185 USDT*
+Всего начислено реферальных: *${Math.floor(referralSum)} ROST = ${Math.floor(referralSum * emissionMultiplier)} USDT*
 
-Всего реинвестировано: *${userReinvestSum} ROST*
+Всего реинвестировано: *${Math.floor(userReinvestSum)} ROST*
 
-Всего обменено *ROST* на *USDT*: *140*
+Всего обменено *ROST* на *USDT*: *0*
 
-Доступный баланс USDT для вывода: *10*
+Доступный баланс USDT для вывода: *0*
 
-Всего выведено: *140 USDT*
+Всего выведено: *0 USDT*
       `,
       {
         reply_markup: {

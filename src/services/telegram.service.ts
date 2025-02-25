@@ -112,7 +112,7 @@ export class TelegramService {
         }
 
         ctx.replyWithMarkdown(`
-*Ваш баланс USDT: ${user.walletBalance}*,
+*Ваш баланс USDT: ${Math.floor(user.walletBalance)}*,
 Укажите количество USDT,
 которое вы хотите отправить пользователю *@${username}*
         `);
@@ -139,7 +139,7 @@ export class TelegramService {
         }
 
         ctx.reply(
-          `Пожалуйста подтвердите транзакцию отправки ${amount} USDT пользователю @${userData.username}`,
+          `Пожалуйста подтвердите транзакцию отправки ${Math.floor(amount)} USDT пользователю @${userData.username}`,
           Markup.inlineKeyboard([
             Markup.button.callback('Подтвердить', 'accept_send_usdt'),
             Markup.button.callback('Отказаться', 'decline_send_usdt'),
@@ -174,7 +174,7 @@ export class TelegramService {
         }
 
         ctx.replyWithMarkdown(
-          `Пожалуйста подтвердите что вы покупаете токен *ROST* на *${amount} USDT* , курс *1 ROST = ${calculateEmissionMultiplier(techUser.rostBalance)} USDT*. Вы получите *${amount} ROST* и запустите транзакцию инвестирования.`,
+          `Пожалуйста подтвердите что вы покупаете токен *ROST* на *${Math.floor(amount)} USDT* , курс *1 ROST = ${Math.floor(calculateEmissionMultiplier(techUser.rostBalance))} USDT*. Вы получите *${Math.floor(amount)} ROST* и запустите транзакцию инвестирования.`,
           Markup.inlineKeyboard([
             Markup.button.callback('Подтвердить', 'accept_invest'),
             Markup.button.callback('Отказаться', 'decline_invest'),
@@ -203,7 +203,7 @@ export class TelegramService {
         }
 
         ctx.replyWithMarkdown(
-          `Пожалуйста подтвердите что вы запускаете транзакцию реинвестирования на *${amount} ROST*`,
+          `Пожалуйста подтвердите что вы запускаете транзакцию реинвестирования на *${Math.floor(amount)} ROST*`,
           Markup.inlineKeyboard([
             Markup.button.callback('Подтвердить', 'accept_reinvest'),
             Markup.button.callback('Отказаться', 'decline_reinvest'),
@@ -240,22 +240,19 @@ export class TelegramService {
 
     // Обработка главного меню
     this.bot.hears('Баланс ROST', async (ctx) => {
-      const user = await this.userService.findUserByTgId(ctx.from.id);
-      const groupVolume = await this.userService.getGroupVolume(ctx.from.id);
-
-      this.tgMenuService.setupROSTBalanceMenu(
-        ctx,
-        user?.rostBalance,
-        groupVolume,
-      );
+      await this.tgMenuService.setupROSTBalanceMenu(ctx);
     });
     this.bot.hears('Баланс выплат', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
       await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
-    this.bot.hears('Поддержка', (ctx) => {
-      ctx.reply('You selected Option 1');
+    this.bot.hears('Поддержка', async (ctx) => {
+      ctx.replyWithMarkdown(`
+*По всем вопросам в рамках проекта с нами можно связаться через телеграм*
+
+@ProStabletex
+      `);
     });
     this.bot.hears('F.A.Q', (ctx) => {
       ctx.reply('You selected Option 2');
@@ -264,8 +261,15 @@ export class TelegramService {
       const tgUserId = ctx.from.id;
       const user = await this.userService.findUserByTgId(tgUserId);
       const referralsInfo = await this.userService.getReferralCounts(tgUserId);
+      const firstLineActiveReferrals =
+        await this.userService.getFirstLineActiveReferralsCount(tgUserId);
 
-      this.tgMenuService.setupReferralsMenu(ctx, user, referralsInfo);
+      this.tgMenuService.setupReferralsMenu(
+        ctx,
+        user,
+        referralsInfo,
+        firstLineActiveReferrals,
+      );
     });
   }
 
@@ -293,7 +297,7 @@ export class TelegramService {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
       ctx.replyWithMarkdown(
-        `Ваш баланс *${user.walletBalance} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
+        `Ваш баланс *${Math.floor(user.walletBalance)} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
 
       Минимальная транзакция *100 USDT*.
       Ваши средства будут распределены:
@@ -345,7 +349,6 @@ export class TelegramService {
         price: amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
         currencyType: CurrencyType.ROST,
       });
-
       const cashboxPullTransaction = await this.pullTransactionService.create({
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.CASH_BOX,
@@ -355,12 +358,6 @@ export class TelegramService {
       });
       const referralValue =
         (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.1;
-      const referralPullTransaction = await this.pullTransactionService.create({
-        type: PullTransactionType.REFERRAL,
-        price: referralValue,
-        currencyType: CurrencyType.ROST,
-      });
-
       const userReferrals = await this.userService.getUserReferrals(tgUserId);
 
       for (const [levelName, userIds] of Object.entries(userReferrals)) {
@@ -374,6 +371,15 @@ export class TelegramService {
                 ? (referralValue * 0.2) / usersCount
                 : (referralValue * 0.1) / usersCount;
 
+          const referralPullTransaction =
+            await this.pullTransactionService.create({
+              type: PullTransactionType.REFERRAL,
+              origin: new Types.ObjectId(transaction._id),
+              receiver: userId,
+              price: curReferralValue,
+              currencyType: CurrencyType.ROST,
+            });
+
           await this.userService.updateUser(curUser.tgUserId, {
             rostBalance: curUser.rostBalance + curReferralValue,
           });
@@ -381,7 +387,6 @@ export class TelegramService {
       }
 
       await this.userService.updateUser(tgUserId, {
-        rostBalance: user.rostBalance + amount,
         walletBalance: user.walletBalance - amount,
       });
       await this.userService.updateUser(Number(process.env.TECH_ACC_TG_ID), {
@@ -463,7 +468,7 @@ export class TelegramService {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
       ctx.reply(`
-Ваш доступный баланс *${user.rostBalance} ROST*, пожалуйста отправьте мне количество *ROST* которое вы хотите реинвестировать
+Ваш доступный баланс *${Math.floor(user.rostBalance)} ROST*, пожалуйста отправьте мне количество *ROST* которое вы хотите реинвестировать
 
 Минимальная транзакция *100 ROST*.
 Ваши средства будут распределены:
@@ -622,7 +627,7 @@ export class TelegramService {
   
 Максимальная эмиссия: ${formatNumber(process.env.MAX_EMISSION_VALUE)} ROST
 
-До следуюего повышения курса осталось выкупить: ${formatNumber(nextRateRaseNumber)} ROST
+До следуюего повышения курса осталось выкупить: ${formatNumber(Math.floor(nextRateRaseNumber))} ROST
 
 Сожжено: 0 ROST
 

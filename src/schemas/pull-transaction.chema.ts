@@ -6,6 +6,7 @@ import { CurrencyType, PullTransactionType } from 'src/common';
 export interface IPullTransaction {
   type: PullTransactionType;
   price: number;
+  receiver?: Types.ObjectId;
   origin?: Types.ObjectId;
   currencyType: CurrencyType;
   createdAt: Date;
@@ -25,6 +26,16 @@ export class PullTransaction implements IPullTransaction {
     required: false,
   })
   origin: Types.ObjectId;
+
+  @ApiProperty({
+    description: 'ID пользователя',
+    type: String,
+    example: '60d5ec49f1d3c72f9c8b4567',
+    required: false,
+  })
+  @Prop({ type: Types.ObjectId, required: false, ref: 'User' })
+  receiver: Types.ObjectId;
+
   @ApiProperty({
     description: 'Тип транзакции',
     enum: PullTransactionType,

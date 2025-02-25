@@ -5,11 +5,16 @@ import moment from 'moment';
 import {
   BeeQueues,
   BeeQueueService,
+  calculateEmissionMultiplier,
   CurrencyType,
   getMillisecondsUntil9,
   PullTransactionType,
 } from 'src/common';
-import { PullTransactionService, UserService } from 'src/services';
+import {
+  PullTransactionService,
+  TransactionService,
+  UserService,
+} from 'src/services';
 
 @Injectable()
 export class CashboxPullProcessor {
@@ -17,6 +22,7 @@ export class CashboxPullProcessor {
   constructor(
     private readonly beeQueueService: BeeQueueService,
     private readonly pullTransactionService: PullTransactionService,
+    private readonly transactionService: TransactionService,
     private readonly userService: UserService,
   ) {
     const beeQueueConfig = {
@@ -78,20 +84,56 @@ export class CashboxPullProcessor {
 
       const cashboxPullTransactionsSum =
         await this.pullTransactionService.calculateCashboxPullTransactionsSum();
-      const usersCount = await this.userService.getUsersCount();
+      const activeUserIds = await this.userService.getActiveUserIds();
+      const usersCount = activeUserIds.length;
       const dailyCashboxPullValue = cashboxPullTransactionsSum / usersCount;
-
-      await pullTransactionService.create({
-        type: PullTransactionType.CASH_BOX_TOPUP,
-        price: dailyCashboxPullValue,
-        currencyType: CurrencyType.ROST,
-      });
-      await this.userService.updateMany(
-        { tgUserId: { $ne: process.env.TECH_ACC_TG_ID } },
-        {
-          $inc: { rostBalance: dailyCashboxPullValue },
-        },
+      const techUser = await this.userService.findUserByTgId(
+        Number(process.env.TECH_ACC_TG_ID),
       );
+
+      for (const activeUserId of activeUserIds) {
+        const userInvestSum =
+          await this.transactionService.getUserInvestSum(activeUserId);
+        const userCashboxTopupSum =
+          await this.pullTransactionService.getUserCashboxTopupSum(
+            activeUserId,
+          );
+        console.log(userInvestSum, userCashboxTopupSum);
+        const userTopupLimit = userInvestSum - userCashboxTopupSum;
+        let userTopupValue = 0;
+
+        if (userTopupLimit < dailyCashboxPullValue) {
+          userTopupValue = userTopupLimit;
+
+          const topupTechAcc = dailyCashboxPullValue - userTopupLimit;
+
+          await pullTransactionService.create({
+            type: PullTransactionType.CASH_BOX_TOPUP_TECH_ACC,
+            receiver: techUser._id as any,
+            price: topupTechAcc,
+            currencyType: CurrencyType.ROST,
+          });
+          await this.userService.updateUserById(techUser._id as any, {
+            $inc: {
+              rostBalance: topupTechAcc,
+            },
+          });
+        } else {
+          userTopupValue = dailyCashboxPullValue;
+        }
+
+        await pullTransactionService.create({
+          type: PullTransactionType.CASH_BOX_TOPUP,
+          receiver: activeUserId,
+          price: userTopupValue,
+          currencyType: CurrencyType.ROST,
+        });
+        await this.userService.updateUserById(activeUserId, {
+          $inc: {
+            rostBalance: userTopupValue,
+          },
+        });
+      }
 
       console.log(
         usersCount,
