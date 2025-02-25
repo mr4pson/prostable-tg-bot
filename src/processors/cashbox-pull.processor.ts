@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import BeeQueue from 'bee-queue';
 import moment from 'moment';
-import { Types } from 'mongoose';
 
 import {
   BeeQueues,
@@ -43,29 +42,20 @@ export class CashboxPullProcessor {
     };
 
     this.queue[BeeQueues.DAILY_CASH_BOX_PULL].process(async (job, done) => {
-      setTimeout(async () => {
-        const cashboxPullTransactionsSum =
-          await this.pullTransactionService.calculateCashboxPullTransactionsSum();
-        const usersCount = await this.userService.getUsersCount();
-        const dailyCashboxPullValue = cashboxPullTransactionsSum / usersCount;
-
-        await pullTransactionService.create({
-          type: PullTransactionType.CASH_BOX_TOPUP,
-          price: dailyCashboxPullValue,
-          currencyType: CurrencyType.ROST,
-        });
-        await this.userService.updateMany(
-          { tgUserId: { $ne: process.env.TECH_ACC_TG_ID } },
-          {
-            $inc: { rostBalance: dailyCashboxPullValue },
-          },
+      const lastCashBoxTopupTransaction =
+        await pullTransactionService.findPullTransactionsByTypeForLastDay(
+          PullTransactionType.CASH_BOX_TOPUP,
         );
 
-        console.log(
-          usersCount,
-          cashboxPullTransactionsSum,
-          dailyCashboxPullValue,
-        );
+      if (
+        lastCashBoxTopupTransaction.length &&
+        new Date(
+          lastCashBoxTopupTransaction[
+            lastCashBoxTopupTransaction.length - 1
+          ].createdAt,
+        ).getDate() === new Date().getDate()
+      ) {
+        console.log('Cashbox transaction has already been created');
 
         setTimeout(async () => {
           const queue = this.beeQueueService.getQueue(
@@ -77,12 +67,53 @@ export class CashboxPullProcessor {
           await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
 
           console.log(
-            'daily cashbox pull job processed: ',
+            'daily cashbox pull job declined: ',
             job.id,
-            'daily cashbox pull job completed at: ',
+            'daily cashbox pull job declined at: ',
             moment(new Date()).format('hh:mm:ss'),
           );
         });
+        return;
+      }
+
+      const cashboxPullTransactionsSum =
+        await this.pullTransactionService.calculateCashboxPullTransactionsSum();
+      const usersCount = await this.userService.getUsersCount();
+      const dailyCashboxPullValue = cashboxPullTransactionsSum / usersCount;
+
+      await pullTransactionService.create({
+        type: PullTransactionType.CASH_BOX_TOPUP,
+        price: dailyCashboxPullValue,
+        currencyType: CurrencyType.ROST,
+      });
+      await this.userService.updateMany(
+        { tgUserId: { $ne: process.env.TECH_ACC_TG_ID } },
+        {
+          $inc: { rostBalance: dailyCashboxPullValue },
+        },
+      );
+
+      console.log(
+        usersCount,
+        cashboxPullTransactionsSum,
+        dailyCashboxPullValue,
+      );
+
+      setTimeout(async () => {
+        const queue = this.beeQueueService.getQueue(
+          BeeQueues.DAILY_CASH_BOX_PULL,
+        );
+        const delayNumber = getMillisecondsUntil9();
+
+        await this.beeQueueService.removeJob(queue, '1');
+        await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
+
+        console.log(
+          'daily cashbox pull job processed: ',
+          job.id,
+          'daily cashbox pull job completed at: ',
+          moment(new Date()).format('hh:mm:ss'),
+        );
       });
 
       return done(null);
