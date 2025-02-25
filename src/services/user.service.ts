@@ -10,10 +10,14 @@ import {
 import * as bcrypt from 'bcrypt';
 import { User } from '../schemas';
 import { IReferralsInfo } from 'src/common';
+import { TransactionService } from './transaction.service';
 
 @Injectable()
 export class UserService {
-  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<User>,
+    private transactionService: TransactionService,
+  ) {}
 
   async findAllUsers(): Promise<User[]> {
     return this.userModel.find();
@@ -183,5 +187,20 @@ export class UserService {
       level2: level2Ids,
       level3: level3Ids,
     };
+  }
+
+  async getGroupVolume(tgUserId: number) {
+    const userReferrals = await this.getUserReferrals(tgUserId);
+    let totalInvestSum = 0;
+
+    for (const [levelName, userIds] of Object.entries(userReferrals)) {
+      for (const userId of userIds) {
+        const userInvestSum =
+          await this.transactionService.getUserInvestSum(userId);
+        totalInvestSum += userInvestSum;
+      }
+    }
+
+    return totalInvestSum;
   }
 }

@@ -79,18 +79,24 @@ export class TgMenuService {
     );
   }
 
-  public setupROSTBalanceMenu(ctx: Context, rostBalance: number) {
+  public setupROSTBalanceMenu(
+    ctx: Context,
+    rostBalance: number,
+    groupVolume: number,
+  ) {
+    const emissionMultiplier = calculateEmissionMultiplier(rostBalance);
+
     ctx.replyWithMarkdown(
       `
 *Личный объем:*
 
-Накоплено в ПУЛ БИЗНЕС: *${rostBalance} ROST = ${rostBalance} USDT*
+Накоплено в ПУЛ БИЗНЕС: *${rostBalance} ROST = ${(rostBalance * emissionMultiplier) / 2} USDT*
 
 Ваше вознаграждение составит *х5 = ${rostBalance * 5} USDT*
 
 Для получения большего вознаграждения вам осталось накопить ещё 2500 USDT в Пуле Бизнес
 
-*Групповой объем: 0 ROST = 0 USDT*
+*Групповой объем: ${groupVolume} ROST = ${groupVolume * emissionMultiplier} USDT*
 
 Для получения Лидерского Бонуса 1 ВТС 
 Вам осталось накопить 40000 USDT Группового объема

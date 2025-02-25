@@ -241,8 +241,13 @@ export class TelegramService {
     // Обработка главного меню
     this.bot.hears('Баланс ROST', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
+      const groupVolume = await this.userService.getGroupVolume(ctx.from.id);
 
-      this.tgMenuService.setupROSTBalanceMenu(ctx, user?.rostBalance);
+      this.tgMenuService.setupROSTBalanceMenu(
+        ctx,
+        user?.rostBalance,
+        groupVolume,
+      );
     });
     this.bot.hears('Баланс выплат', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
