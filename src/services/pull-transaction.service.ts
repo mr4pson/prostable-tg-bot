@@ -31,7 +31,43 @@ export class PullTransactionService {
   }
 
   async getUserBusinessPullSum(userId: Types.ObjectId): Promise<number> {
-    return this.getUserPriceSum(userId, PullTransactionType.BUSINESS);
+    const [result] = await this.pullTransactionModel.aggregate([
+      // Шаг 1. Фильтруем PullTransaction, чтобы брать только PULL_BUSINESS
+      {
+        $match: {
+          type: PullTransactionType.BUSINESS,
+        },
+      },
+      // Шаг 2. Делаем lookup на "transactions", чтобы подцепить данные origin
+      {
+        $lookup: {
+          from: 'transactions', // имя коллекции Transaction в Mongo
+          localField: 'origin', // поле в PullTransaction
+          foreignField: '_id', // поле в Transaction
+          as: 'originTx', // как назовем поле после lookup
+        },
+      },
+      // Шаг 3. "разворачиваем" массив originTx (т.к. $lookup создает массив)
+      {
+        $unwind: '$originTx',
+      },
+      // Шаг 4. Фильтруем по тому, что originTx.user = userId, и originTx.type = INVEST
+      {
+        $match: {
+          'originTx.user': userId,
+        },
+      },
+      // Шаг 5. Группируем (нам нужна только сумма pullTransaction.price)
+      {
+        $group: {
+          _id: null,
+          totalSum: { $sum: '$price' },
+        },
+      },
+    ]);
+
+    // Если ничего не нашлось, result будет undefined
+    return result?.totalSum ?? 0;
   }
 
   async getUserReferralSum(userId: Types.ObjectId): Promise<number> {

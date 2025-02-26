@@ -5,10 +5,10 @@ import moment from 'moment';
 import {
   BeeQueues,
   BeeQueueService,
-  calculateEmissionMultiplier,
   CurrencyType,
   getMillisecondsUntil9,
   PullTransactionType,
+  roundDecimals,
 } from 'src/common';
 import {
   PullTransactionService,
@@ -86,7 +86,9 @@ export class CashboxPullProcessor {
         await this.pullTransactionService.calculateCashboxPullTransactionsSum();
       const activeUserIds = await this.userService.getActiveUserIds();
       const usersCount = activeUserIds.length;
-      const dailyCashboxPullValue = cashboxPullTransactionsSum / usersCount;
+      const dailyCashboxPullValue = roundDecimals(
+        cashboxPullTransactionsSum / usersCount,
+      );
       const techUser = await this.userService.findUserByTgId(
         Number(process.env.TECH_ACC_TG_ID),
       );
@@ -98,7 +100,6 @@ export class CashboxPullProcessor {
           await this.pullTransactionService.getUserCashboxTopupSum(
             activeUserId,
           );
-        console.log(userInvestSum, userCashboxTopupSum);
         const userTopupLimit = userInvestSum - userCashboxTopupSum;
         let userTopupValue = 0;
 
@@ -125,12 +126,12 @@ export class CashboxPullProcessor {
         await pullTransactionService.create({
           type: PullTransactionType.CASH_BOX_TOPUP,
           receiver: activeUserId,
-          price: userTopupValue,
+          price: roundDecimals(userTopupValue),
           currencyType: CurrencyType.ROST,
         });
         await this.userService.updateUserById(activeUserId, {
           $inc: {
-            rostBalance: userTopupValue,
+            rostBalance: roundDecimals(userTopupValue),
           },
         });
       }

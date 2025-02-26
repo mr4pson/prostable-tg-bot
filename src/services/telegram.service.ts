@@ -5,6 +5,7 @@ import {
   CurrencyType,
   formatNumber,
   PullTransactionType,
+  roundDecimals,
   TransactionType,
 } from 'src/common';
 import { Markup, Telegraf } from 'telegraf';
@@ -14,6 +15,7 @@ import { PullTransactionService } from './pull-transaction.service';
 import { TgMenuService } from './tg-menu.service';
 import { TransactionService } from './transaction.service';
 import { UserService } from './user.service';
+import { TransactionDocument, User, UserDocument } from 'src/schemas';
 
 @Injectable()
 export class TelegramService {
@@ -299,14 +301,14 @@ export class TelegramService {
       ctx.replyWithMarkdown(
         `Ваш баланс *${Math.floor(user.walletBalance)} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
 
-      Минимальная транзакция *100 USDT*.
-      Ваши средства будут распределены:
+Минимальная транзакция *100 USDT*.
+Ваши средства будут распределены:
 
-      *50%* - будут сохранены в токенах ROST в ПУЛ БИЗНЕС и будут приумножены Вам назад в 5-ти кратном размере в течение года после запуска ЦОД ориентировочная дата 02.2026 года
+*50%* - будут сохранены в токенах ROST в ПУЛ БИЗНЕС и будут приумножены Вам назад в 5-ти кратном размере в течение года после запуска ЦОД ориентировочная дата 02.2026 года
 
-      *40%* - будут сохранены  в токенах ROST в ПУЛ КАССА и затем будут распределены в равных долях между всеми участниками проекта раз в сутки
+*40%* - будут сохранены  в токенах ROST в ПУЛ КАССА и затем будут распределены в равных долях между всеми участниками проекта раз в сутки
 
-      *10%* - распределяются по реферальной системе
+*10%* - распределяются по реферальной системе
       `,
       );
 
@@ -346,53 +348,29 @@ export class TelegramService {
       const businessPullTransaction = await this.pullTransactionService.create({
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.BUSINESS,
-        price: amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
+        price: roundDecimals(
+          amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
+        ),
         currencyType: CurrencyType.ROST,
       });
       const cashboxPullTransaction = await this.pullTransactionService.create({
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.CASH_BOX,
-        price:
+        price: roundDecimals(
           (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.4,
+        ),
         currencyType: CurrencyType.ROST,
       });
-      const referralValue =
-        (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.1;
-      const userReferrals = await this.userService.getUserReferrals(tgUserId);
 
-      for (const [levelName, userIds] of Object.entries(userReferrals)) {
-        for (const userId of userIds) {
-          const curUser = await this.userService.findUserById(userId);
-          const usersCount = userIds.length ?? 1;
-          const curReferralValue =
-            levelName === 'level1'
-              ? (referralValue * 0.7) / usersCount
-              : levelName === 'level2'
-                ? (referralValue * 0.2) / usersCount
-                : (referralValue * 0.1) / usersCount;
-
-          const referralPullTransaction =
-            await this.pullTransactionService.create({
-              type: PullTransactionType.REFERRAL,
-              origin: new Types.ObjectId(transaction._id),
-              receiver: userId,
-              price: curReferralValue,
-              currencyType: CurrencyType.ROST,
-            });
-
-          await this.userService.updateUser(curUser.tgUserId, {
-            rostBalance: curUser.rostBalance + curReferralValue,
-          });
-        }
-      }
-
+      await this.sendReferralTransactions(techUser, user, amount, transaction);
       await this.userService.updateUser(tgUserId, {
         walletBalance: user.walletBalance - amount,
       });
       await this.userService.updateUser(Number(process.env.TECH_ACC_TG_ID), {
-        rostBalance:
+        rostBalance: roundDecimals(
           techUser.rostBalance -
-          amount / calculateEmissionMultiplier(techUser.rostBalance),
+            amount / calculateEmissionMultiplier(techUser.rostBalance),
+        ),
       });
       console.log(trx);
 
@@ -461,6 +439,107 @@ export class TelegramService {
 
       await this.tgMenuService.setupMainMenu(ctx);
     });
+  }
+
+  private async sendReferralTransactions(
+    techUser: UserDocument,
+    user: UserDocument,
+    amount: number,
+    transaction: TransactionDocument,
+  ) {
+    const referralValue = roundDecimals(
+      (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.1,
+    );
+    const firstLvlvreferrer = await this.userService.findUserById(
+      user.referrer,
+    );
+    const secondLlvReferrer = await this.userService.findUserById(
+      firstLvlvreferrer?.referrer,
+    );
+    const thirdLlvReferrer = await this.userService.findUserById(
+      secondLlvReferrer?.referrer,
+    );
+
+    if (
+      firstLvlvreferrer &&
+      firstLvlvreferrer.tgUserId === Number(process.env.TECH_ACC_TG_ID)
+    ) {
+      const curReferralValue = referralValue;
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        origin: transaction._id,
+        receiver: new Types.ObjectId(firstLvlvreferrer._id as string),
+        price: curReferralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.userService.updateUser(firstLvlvreferrer.tgUserId, {
+        rostBalance: firstLvlvreferrer.rostBalance + curReferralValue,
+      });
+
+      return;
+    } else {
+      const curReferralValue = roundDecimals(referralValue * 0.7);
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        origin: transaction._id,
+        receiver: new Types.ObjectId(firstLvlvreferrer._id as string),
+        price: curReferralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.userService.updateUser(firstLvlvreferrer.tgUserId, {
+        rostBalance: firstLvlvreferrer.rostBalance + curReferralValue,
+      });
+    }
+
+    if (
+      secondLlvReferrer &&
+      secondLlvReferrer.tgUserId === Number(process.env.TECH_ACC_TG_ID)
+    ) {
+      const curReferralValue = roundDecimals(referralValue * 0.3);
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        origin: new Types.ObjectId(transaction._id),
+        receiver: new Types.ObjectId(secondLlvReferrer._id as string),
+        price: curReferralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.userService.updateUser(secondLlvReferrer.tgUserId, {
+        rostBalance: secondLlvReferrer.rostBalance + curReferralValue,
+      });
+
+      return;
+    } else {
+      const curReferralValue = roundDecimals(referralValue * 0.2);
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        origin: new Types.ObjectId(transaction._id),
+        receiver: new Types.ObjectId(secondLlvReferrer._id as string),
+        price: curReferralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.userService.updateUser(secondLlvReferrer.tgUserId, {
+        rostBalance: secondLlvReferrer.rostBalance + curReferralValue,
+      });
+    }
+
+    if (thirdLlvReferrer) {
+      const curReferralValue = roundDecimals(referralValue * 0.1);
+      const referralPullTransaction = await this.pullTransactionService.create({
+        type: PullTransactionType.REFERRAL,
+        origin: new Types.ObjectId(transaction._id),
+        receiver: new Types.ObjectId(thirdLlvReferrer._id as string),
+        price: curReferralValue,
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.userService.updateUser(thirdLlvReferrer.tgUserId, {
+        rostBalance: thirdLlvReferrer.rostBalance + curReferralValue,
+      });
+    }
   }
 
   private handlePaymentsBalanceButtons() {

@@ -8,7 +8,7 @@ import {
   UpdateWithAggregationPipeline,
 } from 'mongoose';
 import * as bcrypt from 'bcrypt';
-import { User } from '../schemas';
+import { User, UserDocument } from '../schemas';
 import { IReferralsInfo } from 'src/common';
 import { TransactionService } from './transaction.service';
 
@@ -34,15 +34,15 @@ export class UserService {
     return this.transactionService.getActiveUserIds();
   }
 
-  async findUserById(id: Types.ObjectId): Promise<User> {
+  async findUserById(id: Types.ObjectId): Promise<UserDocument> {
     return this.userModel.findOne(id);
   }
 
-  async findUserByTgId(tgUserId: number): Promise<User> {
+  async findUserByTgId(tgUserId: number): Promise<UserDocument> {
     return this.userModel.findOne({ tgUserId: tgUserId });
   }
 
-  async findUserByUsername(username: string): Promise<User> {
+  async findUserByUsername(username: string): Promise<UserDocument> {
     return this.userModel.findOne({ username: username });
   }
 
@@ -90,7 +90,7 @@ export class UserService {
   async updateUser(
     tgUserId: number,
     updateData: Partial<User>,
-  ): Promise<User | null> {
+  ): Promise<UserDocument | null> {
     return this.userModel
       .findOneAndUpdate({ tgUserId }, { $set: updateData }, { new: true })
       .exec();

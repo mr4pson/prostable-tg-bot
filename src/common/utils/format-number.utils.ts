@@ -14,3 +14,7 @@ export const formatNumber = (number: number | string) => {
 
   return arr.join('.');
 };
+
+export const roundDecimals = (number: number) => {
+  return Math.round(number * 100) / 100;
+};

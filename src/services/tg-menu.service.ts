@@ -1,15 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { Types } from 'mongoose';
 import {
+  calculateBusinessPullRate,
   calculateEmissionMultiplier,
   formatNumber,
   IReferralsInfo,
 } from 'src/common';
 import { User } from 'src/schemas';
 import { Context } from 'telegraf';
-import { UserService } from './user.service';
-import { TransactionService } from './transaction.service';
-import { Types } from 'mongoose';
 import { PullTransactionService } from './pull-transaction.service';
+import { TransactionService } from './transaction.service';
+import { UserService } from './user.service';
 
 @Injectable()
 export class TgMenuService {
@@ -87,14 +88,18 @@ export class TgMenuService {
       Number(process.env.TECH_ACC_TG_ID),
     );
     const groupVolume = await this.userService.getGroupVolume(ctx.from.id);
-    const businessPullSum =
+    const businessPullSum = Math.floor(
       await this.pullTransactionService.getUserBusinessPullSum(
         new Types.ObjectId(user?._id as string),
-      );
+      ),
+    );
 
     const emissionMultiplier = calculateEmissionMultiplier(
       techUser?.rostBalance,
     );
+    const groupVolumeBonusRemainingValue = 50_000 - groupVolume;
+    const businessPullRate = calculateBusinessPullRate(businessPullSum);
+    const businessPullBonusRemaining = businessPullRate.limit - businessPullSum;
 
     ctx.replyWithMarkdown(
       `
@@ -102,14 +107,14 @@ export class TgMenuService {
 
 Накоплено в ПУЛ БИЗНЕС: *${Math.floor(businessPullSum)} ROST = ${Math.floor(businessPullSum * emissionMultiplier)} USDT*
 
-Ваше вознаграждение составит *х5 = ${Math.floor(businessPullSum * 5)} USDT*
+Ваше вознаграждение составит *х${businessPullRate.rate} = ${Math.floor(businessPullSum * businessPullRate.rate)} USDT*
 
-Для получения большего вознаграждения вам осталось накопить ещё 500 USDT в Пуле Бизнес
+Для получения большего вознаграждения вам осталось накопить ещё ${Math.round(businessPullBonusRemaining)} USDT в Пуле Бизнес
 
 *Групповой объем: ${Math.floor(groupVolume)} ROST = ${Math.floor(groupVolume * emissionMultiplier)} USDT*
 
 Для получения Лидерского Бонуса 1 ВТС 
-Вам осталось накопить 40000 USDT Группового объема
+Вам осталось накопить ${groupVolumeBonusRemainingValue} USDT Группового объема
       `,
       {
         reply_markup: {

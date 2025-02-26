@@ -21,3 +21,23 @@ export const calculateEmissionMultiplier = (
     return 5;
   }
 };
+
+export const calculateBusinessPullRate = (
+  pullBusinessSum: number,
+): { rate: number; limit?: number } => {
+  if (pullBusinessSum < 501) {
+    return { rate: 5, limit: 500 };
+  }
+
+  if (pullBusinessSum >= 501 && pullBusinessSum < 2501) {
+    return { rate: 10, limit: 2500 };
+  }
+
+  if (pullBusinessSum >= 2501 && pullBusinessSum < 5001) {
+    return { rate: 15, limit: 5000 };
+  }
+
+  if (pullBusinessSum >= 5001) {
+    return { rate: 20 };
+  }
+};

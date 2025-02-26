@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, HydratedDocument, Types } from 'mongoose';
 
 interface IUser {
   tgUserId: number;
@@ -46,6 +46,8 @@ export class User extends Document implements IUser {
   @Prop({ default: false })
   hasFundedWallet: boolean;
 }
+
+export type UserDocument = HydratedDocument<User>;
 
 export const UserSchema = SchemaFactory.createForClass(User);
 UserSchema.index({ referrer: 1 });
