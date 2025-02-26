@@ -298,6 +298,14 @@ export class TelegramService {
     this.bot.hears('Инвестировать', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
+      if (ctx.from.id === Number(process.env.TECH_ACC_TG_ID)) {
+        ctx.replyWithMarkdown(
+          'Невозможно инвестировать с технического аккаунта.',
+        );
+
+        return;
+      }
+
       ctx.replyWithMarkdown(
         `Ваш баланс *${Math.floor(user.walletBalance)} USDT* , пожалуйста отправьте мне количество *USDT* на которое вы хотите купить токен *ROST*.
 
