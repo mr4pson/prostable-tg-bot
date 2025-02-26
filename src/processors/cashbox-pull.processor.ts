@@ -6,7 +6,6 @@ import {
   BeeQueues,
   BeeQueueService,
   CurrencyType,
-  getMillisecondsUntil9,
   PullTransactionType,
   roundDecimals,
 } from 'src/common';
@@ -146,7 +145,7 @@ export class CashboxPullProcessor {
         const queue = this.beeQueueService.getQueue(
           BeeQueues.DAILY_CASH_BOX_PULL,
         );
-        const delayNumber = getMillisecondsUntil9();
+        const delayNumber = 3_600_000 * 3;
 
         await this.beeQueueService.removeJob(queue, '1');
         await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
