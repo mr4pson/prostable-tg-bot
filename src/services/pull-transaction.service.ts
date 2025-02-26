@@ -15,10 +15,10 @@ export class PullTransactionService {
     return this.pullTransactionModel.find();
   }
 
-  async findPullTransactionsByTypeForLastDay(
+  async findPullTransactionsByTypeForLast3Hours(
     type: PullTransactionType,
   ): Promise<PullTransaction[]> {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
 
     return this.pullTransactionModel.find({
       type,
@@ -75,7 +75,7 @@ export class PullTransactionService {
   }
 
   async calculateCashboxPullTransactionsSum(): Promise<number> {
-    const pullTransactions = await this.findPullTransactionsByTypeForLastDay(
+    const pullTransactions = await this.findPullTransactionsByTypeForLast3Hours(
       PullTransactionType.CASH_BOX,
     );
 

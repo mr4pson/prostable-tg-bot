@@ -49,7 +49,7 @@ export class CashboxPullProcessor {
 
     this.queue[BeeQueues.DAILY_CASH_BOX_PULL].process(async (job, done) => {
       const lastCashBoxTopupTransaction =
-        await pullTransactionService.findPullTransactionsByTypeForLastDay(
+        await pullTransactionService.findPullTransactionsByTypeForLast3Hours(
           PullTransactionType.CASH_BOX_TOPUP,
         );
 
@@ -59,7 +59,7 @@ export class CashboxPullProcessor {
           lastCashBoxTopupTransaction[
             lastCashBoxTopupTransaction.length - 1
           ].createdAt,
-        ).getDate() === new Date().getDate()
+        ).getHours() === new Date().getHours()
       ) {
         console.log('Cashbox transaction has already been created');
 
@@ -67,7 +67,7 @@ export class CashboxPullProcessor {
           const queue = this.beeQueueService.getQueue(
             BeeQueues.DAILY_CASH_BOX_PULL,
           );
-          const delayNumber = getMillisecondsUntil9();
+          const delayNumber = 3_600_000 * 3;
 
           await this.beeQueueService.removeJob(queue, '1');
           await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
