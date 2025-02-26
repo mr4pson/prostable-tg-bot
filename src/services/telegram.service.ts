@@ -163,11 +163,11 @@ export class TelegramService {
           Number(process.env.TECH_ACC_TG_ID),
         );
 
-        // if (amount < 100) {
-        //   ctx.reply('Введенное количество меньше 100 USDT.');
+        if (amount < 100) {
+          ctx.reply('Введенное количество меньше 100 USDT.');
 
-        //   return;
-        // }
+          return;
+        }
 
         if (user.walletBalance < amount) {
           ctx.reply('Недостаточно средств на балансе.');
@@ -192,11 +192,11 @@ export class TelegramService {
       ) {
         const user = await this.userService.findUserByTgId(ctx.from.id);
 
-        // if (amount < 100) {
-        //   ctx.reply('Введенное количество меньше 100 ROST.');
+        if (amount < 100) {
+          ctx.reply('Введенное количество меньше 100 ROST.');
 
-        //   return;
-        // }
+          return;
+        }
 
         if (user.rostBalance < amount) {
           ctx.reply('Недостаточно средств на балансе.');
