@@ -257,7 +257,7 @@ export class TelegramService {
       `);
     });
     this.bot.hears('F.A.Q', (ctx) => {
-      ctx.reply('You selected Option 2');
+      ctx.reply('Раздел на доработке.');
     });
     this.bot.hears('Реферальная система', async (ctx) => {
       const tgUserId = ctx.from.id;
@@ -579,6 +579,9 @@ export class TelegramService {
     // Обработка принятия условий ивестирования
     this.bot.action('accept_reinvest', async (ctx) => {
       const tgUserId = ctx.from.id;
+      const techUser = await this.userService.findUserByTgId(
+        Number(process.env.TECH_ACC_TG_ID),
+      );
       let user = await this.userService.findUserByTgId(tgUserId);
       const { amount } = this.userDataMap.get(tgUserId);
 
@@ -598,9 +601,36 @@ export class TelegramService {
         return;
       }
 
-      user = await this.userService.updateUser(tgUserId, {
-        rostBalance: user.rostBalance - amount,
+      const businessPullTransaction = await this.pullTransactionService.create({
+        origin: new Types.ObjectId(transaction._id),
+        type: PullTransactionType.BUSINESS,
+        price: roundDecimals(
+          amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
+        ),
+        currencyType: CurrencyType.ROST,
       });
+      const cashboxPullTransaction = await this.pullTransactionService.create({
+        origin: new Types.ObjectId(transaction._id),
+        type: PullTransactionType.CASH_BOX,
+        price: roundDecimals(
+          (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.4,
+        ),
+        currencyType: CurrencyType.ROST,
+      });
+
+      await this.sendReferralTransactions(techUser, user, amount, transaction);
+      await this.userService.updateUser(tgUserId, {
+        walletBalance: user.walletBalance - amount,
+      });
+      user = await this.userService.updateUser(
+        Number(process.env.TECH_ACC_TG_ID),
+        {
+          rostBalance: roundDecimals(
+            techUser.rostBalance -
+              amount / calculateEmissionMultiplier(techUser.rostBalance),
+          ),
+        },
+      );
 
       await ctx.replyWithMarkdown(
         'Транзакция завершена успешно, ваш *ROST* зачислен на *Баланс ROST* и запущена транзакция реинвестирования',
