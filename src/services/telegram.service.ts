@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import {
   calculateEmissionMultiplier,
@@ -16,12 +16,14 @@ import { TgMenuService } from './tg-menu.service';
 import { TransactionService } from './transaction.service';
 import { UserService } from './user.service';
 import { TransactionDocument, User, UserDocument } from 'src/schemas';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 @Injectable()
 export class TelegramService {
   private bot: Telegraf<any>;
-  private userStates = new Map();
-  private userDataMap = new Map();
+  // private userStates = new Map();
+  // private userDataMap = new Map();
 
   constructor(
     private userService: UserService,
@@ -30,6 +32,7 @@ export class TelegramService {
     private moralisService: MoralisService,
     private transactionService: TransactionService,
     private pullTransactionService: PullTransactionService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {
     this.bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN ?? '');
     this.setupHandlers();
@@ -41,8 +44,10 @@ export class TelegramService {
     this.bot.start(async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
 
-      this.userStates.delete(ctx.from.id); // Reset state
-      this.userDataMap.delete(ctx.from.id);
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
+      await this.cacheManager.del(`user-data-map:${ctx.from.id}`);
+      // this.userStates.delete(ctx.from.id); // Reset state
+      // this.userDataMap.delete(ctx.from.id);
 
       if (user && user.publicKey) {
         await this.tgMenuService.setupMainMenu(ctx);
@@ -94,15 +99,16 @@ export class TelegramService {
   private async handleTextInput() {
     this.bot.on('text', async (ctx) => {
       const tgUserId = ctx.from.id;
+      const userState = await this.cacheManager.get(`user-state:${tgUserId}`);
 
-      if (this.userStates.get(tgUserId) === 'registration') {
+      if (userState === 'registration') {
         await this.handleRegistration(ctx);
-        this.userStates.delete(tgUserId);
+        await this.cacheManager.get(`user-state:${tgUserId}`);
 
         return;
       }
 
-      if (this.userStates.get(tgUserId) === 'send_usdt_username_input') {
+      if (userState === 'send_usdt_username_input') {
         const user = await this.userService.findUserByTgId(ctx.from.id);
         const username = ctx.message.text.replace('@', '');
         const receiver = await this.userService.findUserByUsername(username);
@@ -119,20 +125,28 @@ export class TelegramService {
 которое вы хотите отправить пользователю *@${username}*
         `);
 
-        this.userStates.set(tgUserId, 'send_usdt_amount_input');
-        this.userDataMap.set(tgUserId, {
+        await this.cacheManager.set(
+          `user-state:${tgUserId}`,
+          'send_usdt_amount_input',
+        );
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, {
           username,
         });
       }
 
       const amount = Number(ctx.message.text);
 
-      if (
-        this.userStates.get(tgUserId) === 'send_usdt_amount_input' &&
-        Number.isInteger(amount)
-      ) {
+      if (userState === 'send_usdt_amount_input' && Number.isInteger(amount)) {
         const user = await this.userService.findUserByTgId(ctx.from.id);
-        const userData = this.userDataMap.get(tgUserId);
+        const userData: any = await this.cacheManager.get(
+          `user-data-map:${tgUserId}`,
+        );
+
+        if (amount < 1) {
+          ctx.reply('Введите сумму не менее 1 USDT.');
+
+          return;
+        }
 
         if (user.walletBalance < amount) {
           ctx.reply('Недостаточно средств на балансе.');
@@ -148,16 +162,13 @@ export class TelegramService {
           ]),
         );
 
-        this.userDataMap.set(tgUserId, {
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, {
           ...userData,
           amount,
         });
       }
 
-      if (
-        this.userStates.get(tgUserId) === 'invest' &&
-        Number.isInteger(amount)
-      ) {
+      if (userState === 'invest' && Number.isInteger(amount)) {
         const user = await this.userService.findUserByTgId(ctx.from.id);
         const techUser = await this.userService.findUserByTgId(
           Number(process.env.TECH_ACC_TG_ID),
@@ -183,13 +194,11 @@ export class TelegramService {
           ]),
         );
 
-        this.userStates.set(tgUserId, amount);
+        // this.userStates.set(tgUserId, amount);
+        await this.cacheManager.set(`user-state:${tgUserId}`, amount);
       }
 
-      if (
-        this.userStates.get(tgUserId) === 'reinvest' &&
-        Number.isInteger(amount)
-      ) {
+      if (userState === 'reinvest' && Number.isInteger(amount)) {
         const user = await this.userService.findUserByTgId(ctx.from.id);
 
         if (amount < 100) {
@@ -212,7 +221,8 @@ export class TelegramService {
           ]),
         );
 
-        this.userDataMap.set(tgUserId, { amount });
+        // this.userDataMap.set(tgUserId, { amount });
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, { amount });
       }
     });
   }
@@ -289,11 +299,14 @@ export class TelegramService {
         '/transactions/wallet-topup-webhook',
       );
     });
-    this.bot.hears('Отправить USDT пользователю', (ctx) => {
+    this.bot.hears('Отправить USDT пользователю', async (ctx) => {
       ctx.reply(`Для внутреннего перевода USDT укажите логин телеграмма зарегистрированного пользователя бота ProStable.
 Пример: @ProStable`);
 
-      this.userStates.set(ctx.from.id, 'send_usdt_username_input');
+      await this.cacheManager.set(
+        `user-state:${ctx.from.id}`,
+        'send_usdt_username_input',
+      );
     });
     this.bot.hears('Инвестировать', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
@@ -320,7 +333,7 @@ export class TelegramService {
       `,
       );
 
-      this.userStates.set(ctx.from.id, 'invest');
+      await this.cacheManager.set(`user-state:${ctx.from.id}`, 'invest');
     });
 
     // Обработка принятия условий ивестирования
@@ -330,11 +343,20 @@ export class TelegramService {
       const techUser = await this.userService.findUserByTgId(
         Number(process.env.TECH_ACC_TG_ID),
       );
-      const amount = this.userStates.get(tgUserId);
+      // const amount = this.userStates.get(tgUserId);
+      const amount: number = await this.cacheManager.get(
+        `user-state:${ctx.from.id}`,
+      );
+
+      if (typeof amount === 'undefined') {
+        ctx.reply('Произошла ошибка. Повторите снова.');
+
+        return;
+      }
 
       const trx = await this.blockchainService.handleDeposit(
         user.privateKey,
-        amount,
+        Number(amount),
       );
 
       const transaction = await this.transactionService.create({
@@ -387,8 +409,7 @@ export class TelegramService {
         Markup.keyboard(['Баланс ROST']).resize(),
       );
 
-      this.userStates.delete(tgUserId);
-
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
       await this.tgMenuService.setupMainMenu(ctx);
     });
 
@@ -398,8 +419,7 @@ export class TelegramService {
         'Транзакция покупки ROST отклонена, если захотите повторно запустить транзакцию инвестирования то нажмите на кнопку "Инвестировать"',
       );
 
-      this.userStates.delete(ctx.from.id);
-
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
       await this.tgMenuService.setupMainMenu(ctx);
     });
 
@@ -407,7 +427,10 @@ export class TelegramService {
     this.bot.action('accept_send_usdt', async (ctx) => {
       const tgUserId = ctx.from.id;
       const user = await this.userService.findUserByTgId(tgUserId);
-      const userData = this.userDataMap.get(tgUserId);
+      // const userData = this.userDataMap.get(tgUserId);
+      const userData: any = await this.cacheManager.get(
+        `user-data-map:${ctx.from.id}`,
+      );
       const receiver = await this.userService.findUserByUsername(
         userData.username,
       );
@@ -436,14 +459,14 @@ export class TelegramService {
         userData.amount,
       );
 
-      this.userStates.delete(tgUserId);
-      this.userDataMap.delete(tgUserId);
+      await this.cacheManager.del(`user-state:${tgUserId}`);
+      await this.cacheManager.del(`user-data-map:${tgUserId}`);
     });
 
     // Обработка отклонения условий отправки USDT
     this.bot.action('decline_send_usdt', async (ctx) => {
-      this.userStates.delete(ctx.from.id);
-      this.userDataMap.delete(ctx.from.id);
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
+      await this.cacheManager.del(`user-data-map:${ctx.from.id}`);
 
       await this.tgMenuService.setupMainMenu(ctx);
     });
@@ -567,7 +590,7 @@ export class TelegramService {
 *10%* - распределяются по реферальной системе
         `);
 
-      this.userStates.set(ctx.from.id, 'reinvest');
+      await this.cacheManager.set(`user-state:${ctx.from.id}`, 'reinvest');
     });
     this.bot.hears('Обмен ROST USDT', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
@@ -583,7 +606,9 @@ export class TelegramService {
         Number(process.env.TECH_ACC_TG_ID),
       );
       let user = await this.userService.findUserByTgId(tgUserId);
-      const { amount } = this.userDataMap.get(tgUserId);
+      const { amount } = (await this.cacheManager.get(
+        `user-data-map:${tgUserId}`,
+      )) as any;
 
       const transaction = await this.transactionService.create({
         user: new Types.ObjectId(user._id as string),
@@ -637,8 +662,8 @@ export class TelegramService {
         Markup.keyboard(['Баланс ROST']).resize(),
       );
 
-      this.userStates.delete(tgUserId);
-      this.userDataMap.delete(tgUserId);
+      await this.cacheManager.del(`user-state:${tgUserId}`);
+      await this.cacheManager.del(`user-data-map:${tgUserId}`);
 
       await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
@@ -649,7 +674,7 @@ export class TelegramService {
         'Транзакция покупки ROST отклонена, если захотите повторно запустить транзакцию инвестирования то нажмите на кнопку "Инвестировать"',
       );
 
-      this.userStates.delete(ctx.from.id);
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
 
       await this.tgMenuService.setupMainMenu(ctx);
     });
@@ -696,7 +721,7 @@ export class TelegramService {
         'Теперь для завершения процесса регистрации пожалуйста введите ваш адрес e-mail',
       );
 
-      this.userStates.set(tgUserId, 'registration');
+      await this.cacheManager.set(`user-state:${tgUserId}`, 'registration');
     });
 
     this.bot.action('check_subscription', async (ctx) => {

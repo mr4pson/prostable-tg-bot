@@ -22,6 +22,7 @@
   "dependencies": {
     "@moralisweb3/evm-utils": "^2.27.2",
     "@moralisweb3/streams": "^2.27.2",
+    "@nestjs/cache-manager": "^2.3.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",
@@ -32,6 +33,7 @@
     "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "bee-queue": "^1.7.1",
+    "cache-manager-redis-yet": "^5.1.5",
     "dotenv": "^16.4.7",
     "moment": "^2.30.1",
     "mongoose": "^8.9.6",

@@ -5,3 +5,4 @@ export * from './enums';
 export * from './interfaces';
 export * from './usdtContractABI';
 export * from './utils';
+export * from './data-cache';

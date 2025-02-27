@@ -3,7 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BNB_NETWORK, EthersModule } from 'nestjs-ethers';
 import * as process from 'node:process';
-import { BeeQueueModule, BeeQueues, BeeQueueService } from './common';
+import {
+  BeeQueueModule,
+  BeeQueues,
+  BeeQueueService,
+  DataCacheModule,
+} from './common';
 import { TransactionController } from './controllers/transaction.controller';
 import { CashboxPullProcessor } from './processors';
 import {
@@ -29,6 +34,7 @@ import { MoralisService } from './services/moralis.service';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    DataCacheModule,
     MongooseModule.forRoot(process.env.MONGO_URI ?? ''),
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
@@ -59,7 +65,6 @@ export class AppModule {
     const dailyCashboxPullQueue = this.beeQueueService.getQueue(
       BeeQueues.DAILY_CASH_BOX_PULL,
     );
-    // const delayNumberForDailyClean = getMillisecondsUntil9();
     const delayNumberForDailyClean = 3_600_000 * 3;
 
     this.beeQueueService
