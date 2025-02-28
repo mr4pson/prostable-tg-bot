@@ -14,6 +14,13 @@ export class TransactionService {
     return this.transactionModel.find();
   }
 
+  async getUserAllInvestSum(userId: Types.ObjectId): Promise<number> {
+    const investSum = await this.getUserInvestSum(userId);
+    const reinvestSum = await this.getUserReInvestSum(userId);
+
+    return investSum + reinvestSum;
+  }
+
   async getUserInvestSum(userId: Types.ObjectId): Promise<number> {
     return this.getUserPriceSum(userId, TransactionType.INVEST);
   }

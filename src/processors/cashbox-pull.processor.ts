@@ -73,10 +73,8 @@ export class CashboxPullProcessor {
           await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
 
           console.log(
-            'daily cashbox pull job declined: ',
-            job.id,
             'daily cashbox pull job declined at: ',
-            moment(new Date()).format('hh:mm:ss'),
+            moment(new Date()).format('DD.MM.YYYY hh:mm:ss'),
           );
         });
         return;
@@ -133,10 +131,8 @@ export class CashboxPullProcessor {
         await this.beeQueueService.addJob(queue, {}, delayNumber, '1');
 
         console.log(
-          'daily cashbox pull job processed: ',
-          job.id,
           'daily cashbox pull job completed at: ',
-          moment(new Date()).format('hh:mm:ss'),
+          moment(new Date()).format('DD.MM.YYYY hh:mm:ss'),
         );
       });
 
@@ -156,7 +152,7 @@ export class CashboxPullProcessor {
 
     for (const activeUserId of activeUserIds) {
       const userInvestSum =
-        await this.transactionService.getUserInvestSum(activeUserId);
+        await this.transactionService.getUserAllInvestSum(activeUserId);
       const userCashboxTopupSum =
         await this.pullTransactionService.getUserCashboxTopupSum(activeUserId);
       const userTopupLimit = userInvestSum - userCashboxTopupSum;

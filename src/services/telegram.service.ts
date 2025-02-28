@@ -645,17 +645,8 @@ export class TelegramService {
 
       await this.sendReferralTransactions(techUser, user, amount, transaction);
       await this.userService.updateUser(tgUserId, {
-        walletBalance: user.walletBalance - amount,
+        rostBalance: user.rostBalance - amount,
       });
-      user = await this.userService.updateUser(
-        Number(process.env.TECH_ACC_TG_ID),
-        {
-          rostBalance: roundDecimals(
-            techUser.rostBalance -
-              amount / calculateEmissionMultiplier(techUser.rostBalance),
-          ),
-        },
-      );
 
       await ctx.replyWithMarkdown(
         'Транзакция завершена успешно, ваш *ROST* зачислен на *Баланс ROST* и запущена транзакция реинвестирования',
