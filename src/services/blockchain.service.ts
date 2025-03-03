@@ -55,8 +55,10 @@ export class BlockchainService {
     const tx = {
       to: toAddress,
       value: parseEther('0.0015'),
-      gasLimit: 21000, // Standard gas limit for simple transfers
+      // gasLimit: 21000, // Standard gas limit for simple transfers
       gasPrice: await adminWallet.getGasPrice(),
+      // gasLimit: hexValue(150000000), // Standard gas limit for simple transfers
+      // gasPrice: parseUnits('1', 'gwei'),
     };
 
     // Send and wait for transaction confirmation
