@@ -359,6 +359,16 @@ export class TelegramService {
         Number(amount),
       );
 
+      if (!trx) {
+        await ctx.replyWithMarkdown(
+          'Транзакция завершена с ошибкой. Обратитесь к администратору.',
+          Markup.keyboard(['Баланс ROST']).resize(),
+        );
+        console.log('Deposit failed');
+
+        return;
+      }
+
       const transaction = await this.transactionService.create({
         user: new Types.ObjectId(user._id as string),
         type: TransactionType.INVEST,
@@ -366,11 +376,12 @@ export class TelegramService {
         currencyType: CurrencyType.USDT,
       });
 
-      if (!trx || !transaction) {
+      if (!transaction) {
         await ctx.replyWithMarkdown(
-          'Транзакция отклонена',
+          'Транзакция завершена с ошибкой. Обратитесь к администратору.',
           Markup.keyboard(['Баланс ROST']).resize(),
         );
+        console.log('Deposit Mongo Transaction Creation failed');
 
         return;
       }

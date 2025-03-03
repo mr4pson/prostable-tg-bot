@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Transaction } from '../schemas';
+import { Transaction, TransactionDocument } from '../schemas';
 import { TransactionType } from 'src/common';
 
 @Injectable()
@@ -35,13 +35,15 @@ export class TransactionService {
     });
   }
 
-  async create(payload: Partial<Transaction>) {
+  async create(
+    payload: Partial<Transaction>,
+  ): Promise<TransactionDocument | null> {
     try {
       return this.transactionModel.create(payload);
     } catch (error) {
       console.log(error);
 
-      return false;
+      return null;
     }
   }
 

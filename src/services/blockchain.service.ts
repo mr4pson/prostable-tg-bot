@@ -66,7 +66,7 @@ export class BlockchainService {
     return await txResponse.wait();
   }
 
-  public handleApprove(privateKey: string, amount: number) {
+  public async handleApprove(privateKey: string, amount: number) {
     const userWallet = this.ethersSigner.createWallet(privateKey);
     const usdtContract = this.ethersContract.create(
       process.env.USDT_CONTRACT_ADDRESS,
@@ -77,6 +77,9 @@ export class BlockchainService {
     return usdtContract.approve(
       process.env.CONTRACT_ADDRESS,
       parseUnits(amount.toString(), 18),
+      {
+        gasPrice: await userWallet.getGasPrice(),
+      },
     );
   }
 
