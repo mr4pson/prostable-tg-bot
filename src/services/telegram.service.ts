@@ -617,14 +617,21 @@ export class TelegramService {
         Number(process.env.TECH_ACC_TG_ID),
       );
       let user = await this.userService.findUserByTgId(tgUserId);
-      const { amount } = (await this.cacheManager.get(
+      const userDataMap = (await this.cacheManager.get(
         `user-data-map:${tgUserId}`,
       )) as any;
+
+      if (!userDataMap) {
+        ctx.reply('Ошибка при создании транзакции.');
+        console.log('accept_reinvest userdata is undefined');
+
+        return;
+      }
 
       const transaction = await this.transactionService.create({
         user: new Types.ObjectId(user._id as string),
         type: TransactionType.REINVEST,
-        price: amount,
+        price: userDataMap?.amount,
         currencyType: CurrencyType.ROST,
       });
 
@@ -641,7 +648,9 @@ export class TelegramService {
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.BUSINESS,
         price: roundDecimals(
-          amount / calculateEmissionMultiplier(techUser.rostBalance) / 2,
+          userDataMap?.amount /
+            calculateEmissionMultiplier(techUser.rostBalance) /
+            2,
         ),
         currencyType: CurrencyType.ROST,
       });
@@ -649,14 +658,21 @@ export class TelegramService {
         origin: new Types.ObjectId(transaction._id),
         type: PullTransactionType.CASH_BOX,
         price: roundDecimals(
-          (amount / calculateEmissionMultiplier(techUser.rostBalance)) * 0.4,
+          (userDataMap?.amount /
+            calculateEmissionMultiplier(techUser.rostBalance)) *
+            0.4,
         ),
         currencyType: CurrencyType.ROST,
       });
 
-      await this.sendReferralTransactions(techUser, user, amount, transaction);
+      await this.sendReferralTransactions(
+        techUser,
+        user,
+        userDataMap?.amount,
+        transaction,
+      );
       await this.userService.updateUser(tgUserId, {
-        rostBalance: user.rostBalance - amount,
+        rostBalance: user.rostBalance - userDataMap?.amount,
       });
 
       await ctx.replyWithMarkdown(
