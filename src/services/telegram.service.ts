@@ -186,6 +186,8 @@ export class TelegramService {
           return;
         }
 
+        await this.cacheManager.set(`user-state:${tgUserId}`, amount);
+
         ctx.replyWithMarkdown(
           `Пожалуйста подтвердите что вы покупаете токен *ROST* на *${Math.floor(amount)} USDT* , курс *1 ROST = ${Math.floor(calculateEmissionMultiplier(techUser.rostBalance))} USDT*. Вы получите *${Math.floor(amount)} ROST* и запустите транзакцию инвестирования.`,
           Markup.inlineKeyboard([
@@ -195,7 +197,6 @@ export class TelegramService {
         );
 
         // this.userStates.set(tgUserId, amount);
-        await this.cacheManager.set(`user-state:${tgUserId}`, amount);
       }
 
       if (userState === 'reinvest' && Number.isInteger(amount)) {
@@ -213,6 +214,8 @@ export class TelegramService {
           return;
         }
 
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, { amount });
+
         ctx.replyWithMarkdown(
           `Пожалуйста подтвердите что вы запускаете транзакцию реинвестирования на *${Math.floor(amount)} ROST*`,
           Markup.inlineKeyboard([
@@ -222,7 +225,32 @@ export class TelegramService {
         );
 
         // this.userDataMap.set(tgUserId, { amount });
+      }
+
+      if (userState === 'swap' && Number.isInteger(amount)) {
+        const user = await this.userService.findUserByTgId(ctx.from.id);
+
+        if (amount < 100) {
+          ctx.reply('Введенное количество меньше 100 ROST.');
+
+          return;
+        }
+
+        if (user.rostBalance < amount) {
+          ctx.reply('Недостаточно средств на балансе.');
+
+          return;
+        }
+
         await this.cacheManager.set(`user-data-map:${tgUserId}`, { amount });
+
+        ctx.replyWithMarkdown(
+          `Пожалуйста подтвердите что вы запускаете транзакцию обмена на *${Math.floor(amount)} ROST*`,
+          Markup.inlineKeyboard([
+            Markup.button.callback('Подтвердить', 'accept_swap'),
+            Markup.button.callback('Отказаться', 'decline_swap'),
+          ]),
+        );
       }
     });
   }
@@ -604,10 +632,78 @@ export class TelegramService {
       await this.cacheManager.set(`user-state:${ctx.from.id}`, 'reinvest');
     });
     this.bot.hears('Обмен ROST USDT', async (ctx) => {
-      const user = await this.userService.findUserByTgId(ctx.from.id);
+      const tgUserId = ctx.from.id;
+      const user = await this.userService.findUserByTgId(tgUserId);
+
+      ctx.replyWithMarkdown(`
+Ваш доступный баланс ${user.rostBalance} ROST , пожалуйста отправьте мне количество ROST которое вы хотите обменять на USDT
+
+Минимальная транзакция 100 ROST.
+      `);
+
+      await this.cacheManager.set(`user-state:${tgUserId}`, 'swap');
     });
     this.bot.hears('Вывод USDT', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
+    });
+
+    // Обработка принятия условий обмена
+    this.bot.action('accept_swap', async (ctx) => {
+      const tgUserId = ctx.from.id;
+      let user = await this.userService.findUserByTgId(tgUserId);
+      const userDataMap = (await this.cacheManager.get(
+        `user-data-map:${tgUserId}`,
+      )) as any;
+
+      if (!userDataMap) {
+        ctx.reply('Ошибка при создании транзакции.');
+        console.log('accept_swap userdata is undefined');
+
+        return;
+      }
+
+      const transaction = await this.transactionService.create({
+        user: new Types.ObjectId(user._id as string),
+        type: TransactionType.SWAP,
+        price: userDataMap?.amount,
+        currencyType: CurrencyType.ROST,
+      });
+
+      if (!transaction) {
+        await ctx.replyWithMarkdown(
+          'Транзакция отклонена',
+          Markup.keyboard(['Баланс выплат']).resize(),
+        );
+
+        return;
+      }
+
+      user = await this.userService.updateUser(tgUserId, {
+        rostBalance: user.rostBalance - userDataMap?.amount,
+        walletBalance: user.walletBalance + userDataMap?.amount,
+      });
+
+      await ctx.replyWithMarkdown(
+        'Транзакция завершена успешно, баланс выплат обновлен',
+        Markup.keyboard(['Баланс ROST']).resize(),
+      );
+
+      await this.cacheManager.del(`user-state:${tgUserId}`);
+      await this.cacheManager.del(`user-data-map:${tgUserId}`);
+
+      await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
+    });
+
+    // Обработка отклонения условий ивестирования
+    this.bot.action('decline_swap', async (ctx) => {
+      const user = await this.userService.findUserByTgId(ctx.from.id);
+      await ctx.reply(
+        'Транзакция обммена ROST USDT отклонена, если захотите повторно запустить транзакцию обмена то нажмите на кнопку "Обмен ROST UDST"',
+      );
+
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
+
+      await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
     // Обработка принятия условий ивестирования
@@ -616,7 +712,7 @@ export class TelegramService {
       const techUser = await this.userService.findUserByTgId(
         Number(process.env.TECH_ACC_TG_ID),
       );
-      let user = await this.userService.findUserByTgId(tgUserId);
+      const user = await this.userService.findUserByTgId(tgUserId);
       const userDataMap = (await this.cacheManager.get(
         `user-data-map:${tgUserId}`,
       )) as any;

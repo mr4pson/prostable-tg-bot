@@ -176,6 +176,9 @@ export class TgMenuService {
     const referralSum = await this.pullTransactionService.getUserReferralSum(
       new Types.ObjectId(user?._id as string),
     );
+    const swapSum = await this.transactionService.getUserSwapSum(
+      new Types.ObjectId(user?._id as string),
+    );
 
     ctx.replyWithMarkdown(
       `
@@ -189,7 +192,7 @@ export class TgMenuService {
 
 Всего реинвестировано: *${Math.floor(userReinvestSum)} ROST*
 
-Всего обменено *ROST* на *USDT*: *0*
+Всего обменено *ROST* на *USDT*: *${swapSum}*
 
 Доступный баланс USDT для вывода: *0*
 

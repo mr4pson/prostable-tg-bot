@@ -29,6 +29,10 @@ export class TransactionService {
     return this.getUserPriceSum(userId, TransactionType.REINVEST);
   }
 
+  async getUserSwapSum(userId: Types.ObjectId): Promise<number> {
+    return this.getUserPriceSum(userId, TransactionType.SWAP);
+  }
+
   async getActiveUserIds() {
     return this.transactionModel.distinct('user', {
       type: TransactionType.INVEST,
