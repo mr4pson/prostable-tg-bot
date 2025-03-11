@@ -67,27 +67,39 @@ export class BlockchainService {
   }
 
   public async handleApprove(privateKey: string, amount: number) {
-    const userWallet = this.ethersSigner.createWallet(privateKey);
-    const usdtContract = this.ethersContract.create(
-      process.env.USDT_CONTRACT_ADDRESS,
-      usdtContractAbi,
-      userWallet,
-    );
+    try {
+      const userWallet = this.ethersSigner.createWallet(privateKey);
+      const usdtContract = this.ethersContract.create(
+        process.env.USDT_CONTRACT_ADDRESS,
+        usdtContractAbi,
+        userWallet,
+      );
 
-    return usdtContract.approve(
-      process.env.CONTRACT_ADDRESS,
-      parseUnits(amount.toString(), 18),
-      {
-        gasPrice: await userWallet.getGasPrice(),
-      },
-    );
+      const trx = usdtContract.approve(
+        process.env.CONTRACT_ADDRESS,
+        parseUnits(amount.toString(), 18),
+        {
+          gasPrice: await userWallet.getGasPrice(),
+        },
+      );
+
+      return trx;
+    } catch (e) {
+      console.log(e);
+      return undefined;
+    }
   }
 
   public async handleDeposit(privateKey: string, amount: number): Promise<any> {
     try {
       const trx = await this.handleApprove(privateKey, amount);
 
-      await trx.wait();
+      if (!trx) {
+        console.log('Handle deposit failed');
+        return false;
+      }
+
+      await trx?.wait();
       console.log(trx);
 
       const userWallet = this.ethersSigner.createWallet(privateKey);
