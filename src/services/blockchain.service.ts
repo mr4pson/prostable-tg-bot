@@ -3,6 +3,7 @@ import {
   Contract,
   EthersContract,
   EthersSigner,
+  formatUnits,
   hexValue,
   InjectContractProvider,
   InjectSignerProvider,
@@ -75,6 +76,15 @@ export class BlockchainService {
         userWallet,
       );
 
+      const balanceBN = await usdtContract.balanceOf(userWallet.address);
+      const balanceDecimal = parseInt(formatUnits(balanceBN, 18));
+
+      if (balanceDecimal < amount) {
+        console.log('Insufficient balance in wallet');
+
+        return false;
+      }
+
       const trx = usdtContract.approve(
         process.env.CONTRACT_ADDRESS,
         parseUnits(amount.toString(), 18),
@@ -85,7 +95,7 @@ export class BlockchainService {
 
       return trx;
     } catch (e) {
-      console.log(e);
+      console.log(e, new Date());
       return undefined;
     }
   }
@@ -95,7 +105,7 @@ export class BlockchainService {
       const trx = await this.handleApprove(privateKey, amount);
 
       if (!trx) {
-        console.log('Handle deposit failed');
+        console.log('Handle approve failed');
         return false;
       }
 
@@ -111,7 +121,7 @@ export class BlockchainService {
 
       return contract.deposit(parseUnits(amount.toString(), 18));
     } catch (error) {
-      console.log(error);
+      console.log(error, new Date());
       return false;
     }
   }

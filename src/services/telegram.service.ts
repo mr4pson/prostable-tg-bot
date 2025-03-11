@@ -390,7 +390,7 @@ export class TelegramService {
       if (!trx) {
         await ctx.replyWithMarkdown(
           'Транзакция завершена с ошибкой. Обратитесь к администратору.',
-          Markup.keyboard(['Баланс ROST']).resize(),
+          Markup.keyboard(['Главное меню']).resize(),
         );
         console.log('Deposit failed');
 
