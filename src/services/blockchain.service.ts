@@ -126,21 +126,36 @@ export class BlockchainService {
     }
   }
 
-  public handleSendTransfer(
+  public async handleSendTransfer(
     senderPrivateKey: string,
     receiverPublicKey: string,
     amount: number,
   ): Promise<any> {
-    const userWallet = this.ethersSigner.createWallet(senderPrivateKey);
-    const usdtContract = this.ethersContract.create(
-      process.env.USDT_CONTRACT_ADDRESS,
-      usdtContractAbi,
-      userWallet,
-    );
+    try {
+      const userWallet = this.ethersSigner.createWallet(senderPrivateKey);
+      const usdtContract = this.ethersContract.create(
+        process.env.USDT_CONTRACT_ADDRESS,
+        usdtContractAbi,
+        userWallet,
+      );
 
-    return usdtContract.transfer(
-      receiverPublicKey,
-      parseUnits(amount.toString(), 18),
-    );
+      const trx = await usdtContract.transfer(
+        receiverPublicKey,
+        parseUnits(amount.toString(), 18),
+      );
+
+      if (!trx) {
+        console.log('Handle transfer failed');
+        return false;
+      }
+
+      await trx?.wait();
+      console.log(trx);
+
+      return trx;
+    } catch (error) {
+      console.log(error);
+      return false;
+    }
   }
 }

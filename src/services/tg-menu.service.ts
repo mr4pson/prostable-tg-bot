@@ -184,13 +184,13 @@ export class TgMenuService {
       `
 Всего инвестировано: *${Math.floor(userInvestSum)} USDT = ${Math.floor(userInvestSum * emissionMultiplier)} ROST*
 
+Всего реинвестировано: *${Math.floor(userReinvestSum)} ROST*
+
 Доступный баланс: *${Math.floor(user.rostBalance)} ROST*
 
 Всего начислено из ПУЛ КАССА: *${Math.floor(cashboxPullTopupSum)} ROST = ${Math.floor(cashboxPullTopupSum * emissionMultiplier)} USDT*
 
 Всего начислено реферальных: *${Math.floor(referralSum)} ROST = ${Math.floor(referralSum * emissionMultiplier)} USDT*
-
-Всего реинвестировано: *${Math.floor(userReinvestSum)} ROST*
 
 Всего обменено *ROST* на *USDT*: *${swapSum}*
 
@@ -206,7 +206,10 @@ export class TgMenuService {
               { text: 'Обмен ROST USDT' },
               { text: 'Вывод USDT' },
             ],
-            [{ text: 'Главное меню' }],
+            [
+              { text: 'Главное меню' },
+              //  { text: 'Транзакции' }
+            ],
           ],
           resize_keyboard: true,
           one_time_keyboard: true,

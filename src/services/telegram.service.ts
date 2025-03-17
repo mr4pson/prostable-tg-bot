@@ -492,11 +492,18 @@ export class TelegramService {
         '/transactions/usdt-transfer-webhook',
       );
 
-      await this.blockchainService.handleSendTransfer(
+      const trx = await this.blockchainService.handleSendTransfer(
         user.privateKey,
         receiver.publicKey,
         userData.amount,
       );
+
+      if (!trx) {
+        await ctx.replyWithMarkdown(
+          'Транзакция завершена с ошибкой. Обратитесь к администратору.',
+          Markup.keyboard(['Главное меню']).resize(),
+        );
+      }
 
       await this.cacheManager.del(`user-state:${tgUserId}`);
       await this.cacheManager.del(`user-data-map:${tgUserId}`);
@@ -645,6 +652,23 @@ export class TelegramService {
     });
     this.bot.hears('Вывод USDT', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
+    });
+    this.bot.hears('Транзакции', async (ctx) => {
+      const tgUserId = ctx.from.id;
+      const user = await this.userService.findUserByTgId(tgUserId);
+      const pullTransactions =
+        await this.pullTransactionService.findAllUserPullTransactions(
+          // user._id as Types.ObjectId,
+          new Types.ObjectId('67b9a435240c3cdd558bfe89'),
+        );
+
+      console.log(pullTransactions, pullTransactions.length);
+
+      ctx.replyWithMarkdown(`
+        *Список ваших транзакций:*
+      `);
+
+      this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
     // Обработка принятия условий обмена

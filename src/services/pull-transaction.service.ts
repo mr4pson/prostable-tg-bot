@@ -15,6 +15,14 @@ export class PullTransactionService {
     return this.pullTransactionModel.find();
   }
 
+  async findAllUserPullTransactions(
+    userId: Types.ObjectId,
+  ): Promise<PullTransaction[]> {
+    return this.pullTransactionModel.find({
+      receiver: userId,
+    });
+  }
+
   async findPullTransactionsByTypeForLast3Hours(
     type: PullTransactionType,
   ): Promise<PullTransaction[]> {
