@@ -84,9 +84,8 @@ export class CashboxPullProcessor {
         await this.pullTransactionService.calculateCashboxPullTransactionsSum();
       const activeUserIds = await this.userService.getActiveUserIds();
       const usersCount = activeUserIds.length;
-      const dailyCashboxPullValue = roundDecimals(
-        cashboxPullTransactionsSum / usersCount,
-      );
+      const dailyCashboxPullValue = cashboxPullTransactionsSum / usersCount;
+
       const remainingFeatures =
         await this.getRemainingAccountsAndTopupLimitAccounts(
           activeUserIds,
@@ -105,9 +104,7 @@ export class CashboxPullProcessor {
             userIdWithFullCashboxTopupLimit,
             {
               $inc: {
-                rostBalance: roundDecimals(
-                  remainingFeatures.dailyCashboxPullValue,
-                ),
+                rostBalance: remainingFeatures.dailyCashboxPullValue,
               },
             },
           );
@@ -173,7 +170,7 @@ export class CashboxPullProcessor {
           });
           await this.userService.updateUserById(activeUserId, {
             $inc: {
-              rostBalance: roundDecimals(userTopupValue),
+              rostBalance: userTopupValue,
             },
           });
         }

@@ -4,6 +4,7 @@ import {
   calculateEmissionMultiplier,
   CurrencyType,
   formatNumber,
+  getTransactionName,
   PullTransactionType,
   roundDecimals,
   TransactionType,
@@ -18,6 +19,7 @@ import { UserService } from './user.service';
 import { TransactionDocument, User, UserDocument } from 'src/schemas';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
+import moment from 'moment';
 
 @Injectable()
 export class TelegramService {
@@ -46,8 +48,6 @@ export class TelegramService {
 
       await this.cacheManager.del(`user-state:${ctx.from.id}`);
       await this.cacheManager.del(`user-data-map:${ctx.from.id}`);
-      // this.userStates.delete(ctx.from.id); // Reset state
-      // this.userDataMap.delete(ctx.from.id);
 
       if (user && user.publicKey) {
         await this.tgMenuService.setupMainMenu(ctx);
@@ -195,8 +195,6 @@ export class TelegramService {
             Markup.button.callback('Отказаться', 'decline_invest'),
           ]),
         );
-
-        // this.userStates.set(tgUserId, amount);
       }
 
       if (userState === 'reinvest' && Number.isInteger(amount)) {
@@ -223,8 +221,6 @@ export class TelegramService {
             Markup.button.callback('Отказаться', 'decline_reinvest'),
           ]),
         );
-
-        // this.userDataMap.set(tgUserId, { amount });
       }
 
       if (userState === 'swap' && Number.isInteger(amount)) {
@@ -371,7 +367,6 @@ export class TelegramService {
       const techUser = await this.userService.findUserByTgId(
         Number(process.env.TECH_ACC_TG_ID),
       );
-      // const amount = this.userStates.get(tgUserId);
       const amount: number = await this.cacheManager.get(
         `user-state:${ctx.from.id}`,
       );
@@ -466,7 +461,6 @@ export class TelegramService {
     this.bot.action('accept_send_usdt', async (ctx) => {
       const tgUserId = ctx.from.id;
       const user = await this.userService.findUserByTgId(tgUserId);
-      // const userData = this.userDataMap.get(tgUserId);
       const userData: any = await this.cacheManager.get(
         `user-data-map:${ctx.from.id}`,
       );
@@ -513,7 +507,6 @@ export class TelegramService {
     this.bot.action('decline_send_usdt', async (ctx) => {
       await this.cacheManager.del(`user-state:${ctx.from.id}`);
       await this.cacheManager.del(`user-data-map:${ctx.from.id}`);
-
       await this.tgMenuService.setupMainMenu(ctx);
     });
   }
@@ -658,17 +651,28 @@ export class TelegramService {
       const user = await this.userService.findUserByTgId(tgUserId);
       const pullTransactions =
         await this.pullTransactionService.findAllUserPullTransactions(
-          // user._id as Types.ObjectId,
-          new Types.ObjectId('67b9a435240c3cdd558bfe89'),
+          user._id as Types.ObjectId,
         );
 
-      console.log(pullTransactions, pullTransactions.length);
+      const transactionsText = pullTransactions.reduce(
+        (acc, pullTransaction) => {
+          return `${acc} ${
+            pullTransaction.originTx
+              ? `
+${pullTransaction.originTx.price} ${pullTransaction.originTx.currencyType}, ${getTransactionName(pullTransaction.originTx.type)}, ${moment(pullTransaction.originTx.createdAt).format('hh:mm DD.MM.YYYY')}
+            `
+              : ''
+          }
+${pullTransaction.price} ${pullTransaction.currencyType}, ${getTransactionName(pullTransaction.type)}, ${moment(pullTransaction.createdAt).format('hh:mm DD.MM.YYYY')}
+          `;
+        },
+        ``,
+      );
 
       ctx.replyWithMarkdown(`
         *Список ваших транзакций:*
+${!!pullTransactions.length ? transactionsText : 'Вы не совершили еще ни одной транзакции.'}
       `);
-
-      this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
     // Обработка принятия условий обмена

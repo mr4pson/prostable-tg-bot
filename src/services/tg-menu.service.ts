@@ -206,10 +206,7 @@ export class TgMenuService {
               { text: 'Обмен ROST USDT' },
               { text: 'Вывод USDT' },
             ],
-            [
-              { text: 'Главное меню' },
-              //  { text: 'Транзакции' }
-            ],
+            [{ text: 'Главное меню' }, { text: 'Транзакции' }],
           ],
           resize_keyboard: true,
           one_time_keyboard: true,

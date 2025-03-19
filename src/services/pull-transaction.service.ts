@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { PullTransaction } from '../schemas';
+import { PullTransaction, Transaction } from '../schemas';
 import { PullTransactionType } from 'src/common';
+
+type PullOriginTransaction = PullTransaction & { originTx?: Transaction };
 
 @Injectable()
 export class PullTransactionService {
@@ -17,9 +19,38 @@ export class PullTransactionService {
 
   async findAllUserPullTransactions(
     userId: Types.ObjectId,
-  ): Promise<PullTransaction[]> {
-    return this.pullTransactionModel.find({
+  ): Promise<Array<PullOriginTransaction>> {
+    const bussinessTransactions: Array<PullOriginTransaction> =
+      await this.pullTransactionModel.aggregate([
+        {
+          $match: {
+            type: PullTransactionType.BUSINESS,
+          },
+        },
+        {
+          $lookup: {
+            from: 'transactions',
+            localField: 'origin',
+            foreignField: '_id',
+            as: 'originTx',
+          },
+        },
+        {
+          $unwind: '$originTx',
+        },
+        {
+          $match: {
+            'originTx.user': userId,
+          },
+        },
+      ]);
+
+    const restPullTransactions = await this.pullTransactionModel.find({
       receiver: userId,
+    });
+
+    return bussinessTransactions.concat(restPullTransactions).sort((a, b) => {
+      return a.createdAt.getTime() - b.createdAt.getTime();
     });
   }
 
@@ -40,32 +71,27 @@ export class PullTransactionService {
 
   async getUserBusinessPullSum(userId: Types.ObjectId): Promise<number> {
     const [result] = await this.pullTransactionModel.aggregate([
-      // Шаг 1. Фильтруем PullTransaction, чтобы брать только PULL_BUSINESS
       {
         $match: {
           type: PullTransactionType.BUSINESS,
         },
       },
-      // Шаг 2. Делаем lookup на "transactions", чтобы подцепить данные origin
       {
         $lookup: {
-          from: 'transactions', // имя коллекции Transaction в Mongo
-          localField: 'origin', // поле в PullTransaction
-          foreignField: '_id', // поле в Transaction
-          as: 'originTx', // как назовем поле после lookup
+          from: 'transactions',
+          localField: 'origin',
+          foreignField: '_id',
+          as: 'originTx',
         },
       },
-      // Шаг 3. "разворачиваем" массив originTx (т.к. $lookup создает массив)
       {
         $unwind: '$originTx',
       },
-      // Шаг 4. Фильтруем по тому, что originTx.user = userId, и originTx.type = INVEST
       {
         $match: {
           'originTx.user': userId,
         },
       },
-      // Шаг 5. Группируем (нам нужна только сумма pullTransaction.price)
       {
         $group: {
           _id: null,
@@ -74,7 +100,6 @@ export class PullTransactionService {
       },
     ]);
 
-    // Если ничего не нашлось, result будет undefined
     return result?.totalSum ?? 0;
   }
 
