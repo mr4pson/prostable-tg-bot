@@ -25,6 +25,7 @@ export class PullTransactionService {
         {
           $match: {
             type: PullTransactionType.BUSINESS,
+            price: { $gt: 0 },
           },
         },
         {
@@ -47,6 +48,7 @@ export class PullTransactionService {
 
     const restPullTransactions = await this.pullTransactionModel.find({
       receiver: userId,
+      price: { $gt: 0 },
     });
 
     return bussinessTransactions.concat(restPullTransactions).sort((a, b) => {

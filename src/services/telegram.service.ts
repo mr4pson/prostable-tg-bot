@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Types } from 'mongoose';
 import {
   calculateEmissionMultiplier,
+  chunkArray,
   CurrencyType,
   formatNumber,
   getTransactionName,
@@ -20,6 +21,7 @@ import { TransactionDocument, User, UserDocument } from 'src/schemas';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import moment from 'moment';
+import { reduce } from 'rxjs';
 
 @Injectable()
 export class TelegramService {
@@ -651,28 +653,38 @@ export class TelegramService {
       const user = await this.userService.findUserByTgId(tgUserId);
       const pullTransactions =
         await this.pullTransactionService.findAllUserPullTransactions(
-          user._id as Types.ObjectId,
+          // user._id as Types.ObjectId,
+          new Types.ObjectId('67b9a435240c3cdd558bfe89'),
         );
+      const chunkedPullTransactions = chunkArray(pullTransactions);
+      const transactionsTextArr = chunkedPullTransactions.reduce(
+        (arrayAcc: string[], pullTransactions) => {
+          const transactionsText = pullTransactions.reduce(
+            (acc, pullTransaction) => {
+              return `${acc} ${
+                pullTransaction.originTx
+                  ? `
+  ${pullTransaction.originTx.price} ${pullTransaction.originTx.currencyType}, ${getTransactionName(pullTransaction.originTx.type)}, ${moment(pullTransaction.originTx.createdAt).format('hh:mm DD.MM.YYYY')}
+              `
+                  : ''
+              }
+  ${pullTransaction.price} ${pullTransaction.currencyType}, ${getTransactionName(pullTransaction.type)}, ${moment(pullTransaction.createdAt).format('hh:mm DD.MM.YYYY')}
+            `;
+            },
+            ``,
+          );
 
-      const transactionsText = pullTransactions.reduce(
-        (acc, pullTransaction) => {
-          return `${acc} ${
-            pullTransaction.originTx
-              ? `
-${pullTransaction.originTx.price} ${pullTransaction.originTx.currencyType}, ${getTransactionName(pullTransaction.originTx.type)}, ${moment(pullTransaction.originTx.createdAt).format('hh:mm DD.MM.YYYY')}
-            `
-              : ''
-          }
-${pullTransaction.price} ${pullTransaction.currencyType}, ${getTransactionName(pullTransaction.type)}, ${moment(pullTransaction.createdAt).format('hh:mm DD.MM.YYYY')}
-          `;
+          return arrayAcc.concat(transactionsText);
         },
-        ``,
+        [],
       );
 
-      ctx.replyWithMarkdown(`
+      transactionsTextArr.forEach((transactionsText) => {
+        ctx.replyWithMarkdown(`
         *Список ваших транзакций:*
 ${!!pullTransactions.length ? transactionsText : 'Вы не совершили еще ни одной транзакции.'}
       `);
+      });
     });
 
     // Обработка принятия условий обмена
