@@ -681,9 +681,16 @@ export class TelegramService {
       transactionsTextArr.forEach((transactionsText) => {
         ctx.replyWithMarkdown(`
         *Список ваших транзакций:*
-${!!pullTransactions.length ? transactionsText : 'Вы не совершили еще ни одной транзакции.'}
+        ${transactionsText}
       `);
       });
+
+      if (!pullTransactions.length) {
+        ctx.replyWithMarkdown(`
+          *Список ваших транзакций:*
+Вы не совершили еще ни одной транзакции.
+        `);
+      }
     });
 
     // Обработка принятия условий обмена
