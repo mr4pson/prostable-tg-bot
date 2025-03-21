@@ -653,8 +653,7 @@ export class TelegramService {
       const user = await this.userService.findUserByTgId(tgUserId);
       const pullTransactions =
         await this.pullTransactionService.findAllUserPullTransactions(
-          // user._id as Types.ObjectId,
-          new Types.ObjectId('67b9a435240c3cdd558bfe89'),
+          user._id as Types.ObjectId,
         );
       const chunkedPullTransactions = chunkArray(pullTransactions);
       const transactionsTextArr = chunkedPullTransactions.reduce(
