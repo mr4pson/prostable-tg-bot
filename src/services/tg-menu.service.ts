@@ -194,7 +194,7 @@ export class TgMenuService {
 
 Всего обменено *ROST* на *USDT*: *${swapSum}*
 
-Доступный баланс USDT для вывода: *0*
+Доступный баланс USDT для вывода: *${user.withdrawBalance}*
 
 Всего выведено: *0 USDT*
       `,

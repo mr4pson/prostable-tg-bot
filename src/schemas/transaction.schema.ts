@@ -8,6 +8,7 @@ export interface ITransaction {
   type: TransactionType;
   price: number;
   receiver?: Types.ObjectId;
+  receiverAddress?: string;
   currencyType: CurrencyType;
   createdAt: Date;
 }
@@ -30,6 +31,17 @@ export class Transaction implements ITransaction {
   })
   @Prop({ type: Types.ObjectId, required: false, ref: 'User' })
   receiver: Types.ObjectId;
+
+  @ApiProperty({
+    description: 'Адрес кошелька получателя',
+    type: String,
+    example: '0x0...',
+  })
+  @Prop({
+    type: String,
+    required: false,
+  })
+  receiverAddress?: string;
 
   @ApiProperty({
     description: 'Тип транзакции',

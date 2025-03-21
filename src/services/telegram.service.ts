@@ -1,4 +1,7 @@
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
+import { Cache } from 'cache-manager';
+import moment from 'moment';
 import { Types } from 'mongoose';
 import {
   calculateEmissionMultiplier,
@@ -9,7 +12,9 @@ import {
   PullTransactionType,
   roundDecimals,
   TransactionType,
+  verifyWithdraw,
 } from 'src/common';
+import { TransactionDocument, UserDocument } from 'src/schemas';
 import { Markup, Telegraf } from 'telegraf';
 import { BlockchainService } from './blockchain.service';
 import { MoralisService } from './moralis.service';
@@ -17,11 +22,6 @@ import { PullTransactionService } from './pull-transaction.service';
 import { TgMenuService } from './tg-menu.service';
 import { TransactionService } from './transaction.service';
 import { UserService } from './user.service';
-import { TransactionDocument, User, UserDocument } from 'src/schemas';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
-import moment from 'moment';
-import { reduce } from 'rxjs';
 
 @Injectable()
 export class TelegramService {
@@ -247,6 +247,79 @@ export class TelegramService {
           Markup.inlineKeyboard([
             Markup.button.callback('Подтвердить', 'accept_swap'),
             Markup.button.callback('Отказаться', 'decline_swap'),
+          ]),
+        );
+      }
+
+      if (userState === 'withdraw' && Number.isInteger(amount)) {
+        const user = await this.userService.findUserByTgId(ctx.from.id);
+
+        if (amount < 100) {
+          ctx.reply('Введенное количество меньше 100 USDT.');
+
+          return;
+        }
+
+        if (user.withdrawBalance < amount) {
+          ctx.reply('Недостаточно средств на балансе.');
+
+          return;
+        }
+
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, {
+          amount: amount,
+        });
+        await this.cacheManager.set(
+          `user-state:${tgUserId}`,
+          'withdraw_wallet_enter',
+        );
+
+        ctx.replyWithMarkdown(
+          `Пожалуйста введите адрес кошелька USDT bep20
+
+*❗️При указании другого адреса сети Ваши средства будут утеряны безвозвратно*`,
+        );
+      }
+
+      if (userState === 'withdraw_wallet_enter') {
+        const user = await this.userService.findUserByTgId(ctx.from.id);
+        const userDataMap = (await this.cacheManager.get(
+          `user-data-map:${tgUserId}`,
+        )) as any;
+
+        if (!userDataMap) {
+          ctx.reply('Ошибка при создании транзакции.');
+          console.log('withdraw_wallet_enter userdata is undefined');
+
+          return;
+        }
+
+        if (!this.blockchainService.isEip55Address(ctx.message.text)) {
+          ctx.reply('Введенный адрес некорректен. Введите корректный адрес:');
+
+          return;
+        }
+
+        if (
+          ctx.message.text.toLocaleLowerCase() ===
+          user.publicKey.toLocaleLowerCase()
+        ) {
+          ctx.reply('Вы ввели свой адрес кошелька. Введите корректный адрес:');
+
+          return;
+        }
+
+        await this.cacheManager.set(`user-data-map:${tgUserId}`, {
+          amount: userDataMap.amount,
+          wallet: ctx.message.text,
+        });
+
+        ctx.replyWithMarkdown(
+          `Пожалуйста подтвердите вывод *${Math.floor(userDataMap?.amount - 5)} USDT* на адрес USDT bep20:
+*${ctx.message.text}*`,
+          Markup.inlineKeyboard([
+            Markup.button.callback('Подтвердить', 'accept_withdraw'),
+            Markup.button.callback('Отказаться', 'decline_withdraw'),
           ]),
         );
       }
@@ -646,7 +719,25 @@ export class TelegramService {
       await this.cacheManager.set(`user-state:${tgUserId}`, 'swap');
     });
     this.bot.hears('Вывод USDT', async (ctx) => {
-      const user = await this.userService.findUserByTgId(ctx.from.id);
+      const tgUserId = ctx.from.id;
+      const user = await this.userService.findUserByTgId(tgUserId);
+
+      if (!verifyWithdraw(tgUserId)) {
+        ctx.replyWithMarkdown(`Вывод USDT для вас пока недоступен.`);
+
+        return;
+      }
+
+      ctx.replyWithMarkdown(`
+        Ваш доступный баланс для вывода ${user.withdrawBalance} *USDT*, пожалуйста отправьте мне количество *USDT* которое вы хотите вывести на внешний адрес кошелька.
+
+• Минимальная транзакция вывода 100 *USDT*
+• Вывод суммы менее 200 *USDT* будут отправлены на ваш кошелек в автоматическом режиме в реальном времени 
+• Вывод суммы более 200 *USDT* обрабатывается в ручном режиме в течении суток
+• комиссия за вывод - 5 *USDT*
+      `);
+
+      await this.cacheManager.set(`user-state:${tgUserId}`, 'withdraw');
     });
     this.bot.hears('Транзакции', async (ctx) => {
       const tgUserId = ctx.from.id;
@@ -726,7 +817,7 @@ export class TelegramService {
 
       user = await this.userService.updateUser(tgUserId, {
         rostBalance: user.rostBalance - userDataMap?.amount,
-        walletBalance: user.walletBalance + userDataMap?.amount,
+        withdrawBalance: (user.withdrawBalance ?? 0) + userDataMap?.amount,
       });
 
       await ctx.replyWithMarkdown(
@@ -836,6 +927,107 @@ export class TelegramService {
 
       await this.cacheManager.del(`user-state:${ctx.from.id}`);
 
+      await this.tgMenuService.setupMainMenu(ctx);
+    });
+
+    // Обработка принятия условий вывода
+    this.bot.action('accept_withdraw', async (ctx) => {
+      const tgUserId = ctx.from.id;
+      let user = await this.userService.findUserByTgId(tgUserId);
+      const userDataMap = (await this.cacheManager.get(
+        `user-data-map:${tgUserId}`,
+      )) as any;
+
+      if (!userDataMap) {
+        ctx.reply('Ошибка при создании транзакции.');
+        console.log('accept_withdraw userdata is undefined');
+
+        return;
+      }
+
+      if (userDataMap.amount > 199) {
+        const transaction = await this.transactionService.create({
+          user: new Types.ObjectId(user._id as string),
+          type: TransactionType.MANUAL_WITHDRAW,
+          price: userDataMap.amount,
+          currencyType: CurrencyType.USDT,
+          receiverAddress: userDataMap.wallet,
+        });
+
+        if (!transaction) {
+          await ctx.replyWithMarkdown(
+            'Транзакция отклонена',
+            Markup.keyboard(['Баланс выплат']).resize(),
+          );
+
+          return;
+        }
+
+        await this.userService.updateUser(tgUserId, {
+          withdrawBalance: user.withdrawBalance - userDataMap.amount,
+        });
+
+        await ctx.replyWithMarkdown(
+          `Для вывода ${userDataMap?.amount} USDT, пожалуйста, свяжитесь с администратором @ProStabletex`,
+          Markup.keyboard(['Главное меню']).resize(),
+        );
+
+        return;
+      }
+
+      const trx = await this.blockchainService.handleWithdraw(
+        user,
+        userDataMap.wallet,
+        userDataMap.amount - 5,
+      );
+
+      if (!trx) {
+        await ctx.replyWithMarkdown(
+          'Транзакция завершена с ошибкой. Обратитесь к администратору.',
+          Markup.keyboard(['Главное меню']).resize(),
+        );
+        console.log('Withdraw failed');
+
+        return;
+      }
+
+      const transaction = await this.transactionService.create({
+        user: new Types.ObjectId(user._id as string),
+        type: TransactionType.AUTO_WITHDRAW,
+        price: userDataMap?.amount,
+        receiverAddress: userDataMap.wallet,
+        currencyType: CurrencyType.USDT,
+      });
+
+      if (!transaction) {
+        await ctx.replyWithMarkdown(
+          'Транзакция отклонена',
+          Markup.keyboard(['Баланс выплат']).resize(),
+        );
+
+        return;
+      }
+
+      user = await this.userService.updateUser(tgUserId, {
+        withdrawBalance: user.withdrawBalance - userDataMap?.amount,
+      });
+
+      await ctx.replyWithMarkdown(
+        `Выплата ${userDataMap?.amount - 5} USDT выполнена, хэш транзакции: https://bscscan.com/tx/${trx.hash}`,
+        Markup.keyboard(['Главное меню']).resize(),
+      );
+
+      await this.cacheManager.del(`user-state:${tgUserId}`);
+      await this.cacheManager.del(`user-data-map:${tgUserId}`);
+      await this.tgMenuService.setupMainMenu(ctx);
+    });
+
+    // Обработка отклонения условий вывода
+    this.bot.action('decline_withdraw', async (ctx) => {
+      await ctx.reply(
+        'Транзакция вывода USDT отклонена, если захотите повторно запустить транзакцию вывода то нажмите на кнопку "Вывод USDT"',
+      );
+      await this.cacheManager.del(`user-state:${ctx.from.id}`);
       await this.tgMenuService.setupMainMenu(ctx);
     });
   }

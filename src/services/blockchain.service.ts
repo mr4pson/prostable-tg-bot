@@ -4,7 +4,7 @@ import {
   EthersContract,
   EthersSigner,
   formatUnits,
-  hexValue,
+  getAddress,
   InjectContractProvider,
   InjectSignerProvider,
   parseEther,
@@ -12,6 +12,7 @@ import {
   Wallet,
 } from 'nestjs-ethers';
 import { contractAbi, usdtContractAbi } from 'src/common';
+import { UserDocument } from 'src/schemas';
 
 export const delay = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +47,16 @@ export class BlockchainService {
       publicKey: wallet.address,
       privateKey: wallet.privateKey,
     };
+  }
+
+  isEip55Address(address) {
+    try {
+      const checksumAddress = getAddress(address);
+
+      return checksumAddress === address;
+    } catch (error) {
+      return false;
+    }
   }
 
   async sendBNB(toAddress: string) {
@@ -153,6 +164,45 @@ export class BlockchainService {
       console.log(trx);
 
       return trx;
+    } catch (error) {
+      console.log(error);
+      return false;
+    }
+  }
+
+  public async handleWithdraw(
+    user: UserDocument,
+    receiverPublicKey: string,
+    amount: number,
+  ): Promise<any> {
+    try {
+      const adminWallet = this.ethersSigner.createWallet(
+        process.env.SEND_BNB_WALLET_PRIVATE,
+      );
+      const contract = this.ethersContract.create(
+        process.env.CONTRACT_ADDRESS,
+        contractAbi,
+        adminWallet,
+      );
+
+      const trx = await contract.withdrawByAdmin(
+        user.publicKey,
+        parseUnits(amount.toString(), 18),
+      );
+
+      if (!trx) {
+        console.log('Handle withdraw failed');
+        return false;
+      }
+
+      await trx?.wait();
+      console.log('withdraw trx=', trx);
+
+      return this.handleSendTransfer(
+        user.privateKey,
+        receiverPublicKey,
+        amount,
+      );
     } catch (error) {
       console.log(error);
       return false;

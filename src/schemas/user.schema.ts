@@ -10,6 +10,7 @@ interface IUser {
   email?: string;
   acceptedTerms: boolean;
   walletBalance: number;
+  withdrawBalance: number;
   rostBalance: number;
   hasFundedWallet: boolean;
 }
@@ -39,6 +40,9 @@ export class User extends Document implements IUser {
 
   @Prop({ default: 0 })
   walletBalance: number;
+
+  @Prop({ default: 0 })
+  withdrawBalance: number;
 
   @Prop({ default: 0 })
   rostBalance: number;
