@@ -53,7 +53,9 @@ export class BlockchainService {
     try {
       const checksumAddress = getAddress(address);
 
-      return checksumAddress === address;
+      return (
+        checksumAddress.toLocaleLowerCase() === address.toLocaleLowerCase()
+      );
     } catch (error) {
       return false;
     }
