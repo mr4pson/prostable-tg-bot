@@ -722,11 +722,11 @@ export class TelegramService {
       const tgUserId = ctx.from.id;
       const user = await this.userService.findUserByTgId(tgUserId);
 
-      if (!verifyWithdraw(tgUserId)) {
-        ctx.replyWithMarkdown(`Вывод USDT для вас пока недоступен.`);
+      // if (!verifyWithdraw(tgUserId)) {
+      //   ctx.replyWithMarkdown(`Вывод USDT для вас пока недоступен.`);
 
-        return;
-      }
+      //   return;
+      // }
 
       ctx.replyWithMarkdown(`
         Ваш доступный баланс для вывода ${user.withdrawBalance} *USDT*, пожалуйста отправьте мне количество *USDT* которое вы хотите вывести на внешний адрес кошелька.
