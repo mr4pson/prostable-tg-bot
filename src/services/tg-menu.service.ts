@@ -179,6 +179,9 @@ export class TgMenuService {
     const swapSum = await this.transactionService.getUserSwapSum(
       new Types.ObjectId(user?._id as string),
     );
+    const withdrawSum = await this.transactionService.getUserWithdrawSum(
+      new Types.ObjectId(user?._id as string),
+    );
 
     ctx.replyWithMarkdown(
       `
@@ -196,7 +199,7 @@ export class TgMenuService {
 
 Доступный баланс USDT для вывода: *${user.withdrawBalance}*
 
-Всего выведено: *0 USDT*
+Всего выведено: *${withdrawSum} USDT*
       `,
       {
         reply_markup: {

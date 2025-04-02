@@ -746,6 +746,7 @@ export class TelegramService {
         await this.pullTransactionService.findAllUserPullTransactions(
           user._id as Types.ObjectId,
         );
+
       const chunkedPullTransactions = chunkArray(pullTransactions);
       const transactionsTextArr = chunkedPullTransactions.reduce(
         (arrayAcc: string[], pullTransactions) => {
@@ -769,15 +770,19 @@ export class TelegramService {
         [],
       );
 
-      transactionsTextArr.forEach((transactionsText) => {
-        ctx.replyWithMarkdown(`
-        *Список ваших транзакций:*
-        ${transactionsText}
-      `);
-      });
+      let page = 1;
+
+      for (const transactionsText of transactionsTextArr) {
+        await ctx.replyWithMarkdown(`
+          *Список ваших транзакций: (${page}/${transactionsTextArr.length})*
+          ${transactionsText}
+        `);
+
+        page++;
+      }
 
       if (!pullTransactions.length) {
-        ctx.replyWithMarkdown(`
+        await ctx.replyWithMarkdown(`
           *Список ваших транзакций:*
 Вы не совершили еще ни одной транзакции.
         `);
@@ -827,19 +832,17 @@ export class TelegramService {
 
       await this.cacheManager.del(`user-state:${tgUserId}`);
       await this.cacheManager.del(`user-data-map:${tgUserId}`);
-
       await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
     // Обработка отклонения условий ивестирования
     this.bot.action('decline_swap', async (ctx) => {
       const user = await this.userService.findUserByTgId(ctx.from.id);
+
       await ctx.reply(
         'Транзакция обммена ROST USDT отклонена, если захотите повторно запустить транзакцию обмена то нажмите на кнопку "Обмен ROST UDST"',
       );
-
       await this.cacheManager.del(`user-state:${ctx.from.id}`);
-
       await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
@@ -907,15 +910,12 @@ export class TelegramService {
       await this.userService.updateUser(tgUserId, {
         rostBalance: user.rostBalance - userDataMap?.amount,
       });
-
       await ctx.replyWithMarkdown(
         'Транзакция завершена успешно, ваш *ROST* зачислен на *Баланс ROST* и запущена транзакция реинвестирования',
         Markup.keyboard(['Баланс ROST']).resize(),
       );
-
       await this.cacheManager.del(`user-state:${tgUserId}`);
       await this.cacheManager.del(`user-data-map:${tgUserId}`);
-
       await this.tgMenuService.setupPaymentsBalanceMenu(ctx, user);
     });
 
@@ -924,9 +924,7 @@ export class TelegramService {
       await ctx.reply(
         'Транзакция покупки ROST отклонена, если захотите повторно запустить транзакцию инвестирования то нажмите на кнопку "Инвестировать"',
       );
-
       await this.cacheManager.del(`user-state:${ctx.from.id}`);
-
       await this.tgMenuService.setupMainMenu(ctx);
     });
 
@@ -966,7 +964,6 @@ export class TelegramService {
         await this.userService.updateUser(tgUserId, {
           withdrawBalance: user.withdrawBalance - userDataMap.amount,
         });
-
         await ctx.replyWithMarkdown(
           `Для вывода ${userDataMap?.amount} USDT, пожалуйста, свяжитесь с администратором @ProStabletex`,
           Markup.keyboard(['Главное меню']).resize(),
@@ -1016,7 +1013,6 @@ export class TelegramService {
         `Выплата ${userDataMap?.amount - 5} USDT выполнена, хэш транзакции: https://bscscan.com/tx/${trx.hash}`,
         Markup.keyboard(['Главное меню']).resize(),
       );
-
       await this.cacheManager.del(`user-state:${tgUserId}`);
       await this.cacheManager.del(`user-data-map:${tgUserId}`);
       await this.tgMenuService.setupMainMenu(ctx);
@@ -1039,7 +1035,6 @@ export class TelegramService {
         tgUserId: ctx.from.id,
         acceptedTerms: true,
       });
-
       await ctx.replyWithMarkdown(
         `Отлично! Сейчас мы создадим вам внутренний криптовалютный кошелек, он потребуется для взаимодействия смарт-контрактами и работы реферальной системы`,
 
@@ -1059,7 +1054,6 @@ export class TelegramService {
         privateKey: wallet.privateKey,
         publicKey: wallet.publicKey,
       });
-
       await ctx.reply(
         `Вам создан внутренний криптовалютный кошелек, кошелек подключен к блокчейну BNB Smart Chain (токены BEP20), адрес Вашего кошелька:`,
         {

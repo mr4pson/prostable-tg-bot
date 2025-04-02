@@ -22,15 +22,22 @@ export class TransactionService {
   }
 
   async getUserInvestSum(userId: Types.ObjectId): Promise<number> {
-    return this.getUserPriceSum(userId, TransactionType.INVEST);
+    return this.getTransactionsSum(userId, TransactionType.INVEST);
   }
 
   async getUserReInvestSum(userId: Types.ObjectId): Promise<number> {
-    return this.getUserPriceSum(userId, TransactionType.REINVEST);
+    return this.getTransactionsSum(userId, TransactionType.REINVEST);
   }
 
   async getUserSwapSum(userId: Types.ObjectId): Promise<number> {
-    return this.getUserPriceSum(userId, TransactionType.SWAP);
+    return this.getTransactionsSum(userId, TransactionType.SWAP);
+  }
+
+  async getUserWithdrawSum(userId: Types.ObjectId): Promise<number> {
+    return this.getTransactionsSum(userId, [
+      TransactionType.MANUAL_WITHDRAW,
+      TransactionType.AUTO_WITHDRAW,
+    ]);
   }
 
   async getActiveUserIds() {
@@ -51,15 +58,17 @@ export class TransactionService {
     }
   }
 
-  private async getUserPriceSum(
+  private async getTransactionsSum(
     userId: Types.ObjectId,
-    transactionType: TransactionType,
+    transactionType: TransactionType | Array<TransactionType>,
   ) {
     const result = await this.transactionModel.aggregate([
       {
         $match: {
           user: userId,
-          type: transactionType,
+          type: Array.isArray(transactionType)
+            ? { $in: transactionType }
+            : transactionType,
         },
       },
       {
